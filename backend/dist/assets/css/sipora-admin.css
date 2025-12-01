@@ -1,0 +1,515 @@
+/* ======================================================
+   FORM ADMIN LAYOUT — BLUE WHITE MODERN STYLE
+====================================================== */
+
+.form-admin-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    margin-top: 12px;
+}
+
+/* Row */
+.form-admin-row {
+    display: flex;
+    gap: 20px;
+    width: 100%;
+}
+
+.form-admin-row .form-group {
+    flex: 1;
+}
+
+/* Label */
+.form-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1e3a5f;
+}
+
+/* =======================================
+   INPUT STYLE — Blue White Reference
+======================================= */
+.form-control-custom {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1.6px solid #9ac7dd;
+    border-radius: 8px;
+    background: #ffffffff;
+    font-size: 14px;
+    color: #0f2a43;
+    transition: all 0.18s ease;
+}
+
+.form-control-custom:hover {
+    border-color: #7db3cc;
+}
+
+.form-control-custom:focus {
+    outline: none;
+    background: #e6f4fb;
+    border-color: #4ba3cf;
+    box-shadow: 0 0 0 3px rgba(75,163,207,0.25);
+}
+
+.form-control-custom::placeholder {
+    color: #5f7f93;
+}
+
+/* ==========================
+        MODE GELAP
+========================== */
+body.dark-mode .form-group label {
+    color: #dbeafe;
+}
+
+body.dark-mode .form-control-custom {
+    background: #1e293b;
+    border-color: #334155;
+    color: #f1f5f9;
+}
+
+body.dark-mode .form-control-custom:hover {
+    border-color: #475569;
+}
+
+body.dark-mode .form-control-custom::placeholder {
+    color: #94a3b8;
+}
+
+body.dark-mode .form-control-custom:focus {
+    border-color: #38bdf8;
+    box-shadow: 0 0 0 3px rgba(56,189,248,0.25);
+}
+
+/* ==========================
+        RESPONSIVE
+========================== */
+@media (max-width: 768px) {
+    .form-admin-row {
+        flex-direction: column;
+    }
+}
+
+/* ======================================================
+   BUTTON — GRADIENT DARK BLUE
+====================================================== */
+.btn-gradient {
+    padding: 10px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    color: white;
+
+    background: linear-gradient(135deg, #062a43, #4aa0c4);
+
+    transition: all 0.25s ease;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.25);
+}
+
+.btn-gradient:hover {
+    filter: brightness(1.07);
+    transform: translateY(-1px);
+}
+
+.btn-gradient:active {
+    filter: brightness(0.92);
+    transform: translateY(1px);
+}
+/* ======================================================
+   BUTTON — GRADIENT ORANGE SUNSET
+====================================================== */
+.btn-gradient2 {
+    padding: 10px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    color: white;
+
+    /* Sunset Orange Gradient */
+    background: linear-gradient(135deg,#ff3d00, #ffb15c);
+
+    transition: all 0.25s ease;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.25);
+}
+
+.btn-gradient2:hover {
+    filter: brightness(1.07);
+    transform: translateY(-1px);
+}
+
+.btn-gradient2:active {
+    filter: brightness(0.92);
+    transform: translateY(1px);
+}
+
+/* ======================================================
+   TABLE CUSTOM — BLUE GRADIENT MODERN OVAL
+====================================================== */
+
+.table-custom {
+    border-collapse: separate;
+    border-spacing: 0 10px;
+    background: transparent;
+}
+
+/* Header dengan soft gradient */
+.table-custom thead.table-header-custom {
+    background: linear-gradient(90deg, #062a43);
+    color: #0e2c43;
+    border-radius: 14px;
+}
+
+.table-custom thead.table-header-custom th {
+    background: transparent !important;
+    font-weight: 700;
+    padding: 14px 10px;
+    border: none !important;
+    color: white !important;        /* ← bikin tulisan header jadi putih */
+}
+
+
+/* Row dengan gradasi */
+.table-custom tbody tr {
+    background: linear-gradient(90deg, #062a43, #4aa0c4);
+    border-radius: 14px;
+    overflow: hidden;
+    transition: all 0.25s ease-in-out;
+    color: white;
+}
+
+.table-custom tbody tr td {
+    padding: 14px 12px;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+.table-custom tbody tr:hover {
+    filter: brightness(1.12);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+}
+
+/* Alignment */
+.table-custom td.text-center {
+    text-align: center;
+}
+
+/* Status badge */
+.badge-status-custom {
+    padding: 6px 12px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: capitalize;
+
+    /* Warna teks lebih gelap biar terbaca */
+    color: #0e2c43;
+}
+
+/* SUCCESS — hijau segar dan kontras */
+.badge-status-custom.success {
+    background: #9af2b4;    /* lebih terang */
+}
+
+/* WARNING — kuning tegas */
+.badge-status-custom.warning {
+    background: #ffe28c;    /* kuning kontras */
+}
+
+/* DANGER — merah soft tapi kuat */
+.badge-status-custom.danger {
+    background: #ff9b9b;
+}
+
+
+/* ==========================
+         DARK MODE
+========================== */
+body.dark-mode .table-custom tbody tr {
+    background: #1e293b;
+    color: #eef6ff;
+}
+body.dark-mode .table-custom tbody tr td {
+    background-color: #1e293b !important;
+    color: #eef6ff !important;
+}
+
+body.dark-mode .table-custom tbody tr:hover {
+    filter: brightness(1.15);
+}
+
+body.dark-mode .table-header-custom {
+    background: #2f3e52 !important;
+}
+
+body.dark-mode .table-header-custom th {
+    color: #dbeafe;
+}
+
+/* ============================================================
+   PROFILE CARD — MODERN BLUE WHITE / GLASS STYLE
+============================================================ */
+
+.profile-card {
+    background: #ffffff;
+    border-radius: 18px;
+    padding: 30px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+    border: 1px solid #e2ecf3;
+}
+
+.profile-header {
+    font-size: 20px;
+    font-weight: 700;
+    color: #0a2a43;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Foto profil */
+.profile-photo {
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    object-fit: cover;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    border: 4px solid #ffffff;
+    background: #f5f9fc;
+}
+
+/* Nama */
+.profile-name {
+    font-size: 22px;
+    font-weight: 700;
+    color: #0a2a43;
+}
+
+.profile-role {
+    font-size: 14px;
+    color: #6b8a99;
+}
+
+/* Table profil info */
+.profile-table {
+    width: 100%;
+    margin-top: 12px;
+}
+
+.profile-table th {
+    width: 180px;
+    font-weight: 700;
+    color: #0a2a43;
+    padding: 8px 0;
+}
+
+.profile-table td {
+    color: #2c4963;
+    padding: 8px 0;
+}
+
+/* Tombol area */
+.profile-actions {
+    margin-top: 25px;
+    display: flex;
+    gap: 12px;
+}
+
+/* ============================================================
+   DARK MODE SUPPORT
+============================================================ */
+
+body.dark-mode .profile-card {
+    background: #0f172a;
+    border-color: #223044;
+    color: #e2ecf3;
+}
+
+body.dark-mode .profile-header,
+body.dark-mode .profile-name {
+    color: #e2ecf3;
+}
+
+body.dark-mode .profile-role {
+    color: #94a3b8;
+}
+
+body.dark-mode .profile-table th {
+    color: #e2eaf5;
+}
+
+body.dark-mode .profile-table td {
+    color: #cdd7e5;
+}
+.dark-mode .profile-card {
+  background-color: #1e1e1e !important;
+  color: #e6e6e6 !important;
+}
+
+.dark-mode .profile-card .card-body {
+  background-color: #1e1e1e !important;
+  color: #ffffff !important;
+}
+
+/* ======================================================
+   TABLE HEADER COLOR VARIANTS (BLUE, GREEN, YELLOW, RED)
+====================================================== */
+
+/* BASE HEADER — sudah ada */
+.table-header-custom {
+    background: linear-gradient(90deg, #062a43, #4aa0c4);
+    color: white !important;
+    border-radius: 14px;
+}
+
+/* =====================================
+   🌿 HIJAU (SUCCESS)
+===================================== */
+.table-header-success {
+    background: linear-gradient(90deg, #0f5132, #198754) !important;
+    color: white !important;
+}
+
+/* =====================================
+   🟡 KUNING (WARNING)
+===================================== */
+.table-header-warning {
+    background: linear-gradient(90deg, #997404, #ffc107) !important;
+    color: #2b2b2b !important;
+}
+
+/* =====================================
+   🔥 MERAH (DANGER)
+===================================== */
+.table-header-danger {
+    background: linear-gradient(90deg, #842029, #dc3545) !important;
+    color: white !important;
+}
+
+/* =====================================
+   🔵 BIRU (INFO) — optional
+===================================== */
+.table-header-info {
+    background: linear-gradient(90deg, #0d3b66, #3da9fc) !important;
+    color: white !important;
+}
+body.dark-mode .card,
+body.dark-mode .card-body,
+body.dark-mode .table,
+body.dark-mode .modal-content,
+body.dark-mode .form-control,
+body.dark-mode .form-select {
+    background: #1e1e1e !important;
+    color: #f1f1f1 !important;
+    border-color: #444 !important;
+}
+body.dark-mode h1, 
+body.dark-mode h2,
+body.dark-mode h3,
+body.dark-mode h4,
+body.dark-mode h5,
+body.dark-mode h6,
+body.dark-mode p,
+body.dark-mode span,
+body.dark-mode a,
+body.dark-mode label,
+body.dark-mode th,
+body.dark-mode td {
+    color: #e2e8f0 !important;
+}
+/* ============================
+   DARK MODE FOOTER FIX
+   ============================ */
+.dark-mode .footer {
+  background-color: #1e1e1e !important;
+  color: #ffffff !important;
+  border-top: 1px solid #444 !important;
+}
+
+/* Biar text-muted terlihat saat dark mode */
+.dark-mode .footer .text-muted {
+  color: #cfcfcf !important;
+}
+.dark-mode footer,
+.dark-mode footer * {
+  background-color: transparent !important;
+  color: #ffffff !important;
+}
+/* ==========================
+   DARK MODE - NAVBAR HEADER
+========================== */
+body.dark-mode .navbar,
+body.dark-mode .navbar-brand-wrapper,
+body.dark-mode .navbar-menu-wrapper {
+  background: #1e1e1e !important;
+  color: #ffffff !important;
+  border-color: #333 !important;
+}
+
+/* Logo tetap terang */
+body.dark-mode .navbar-brand-wrapper img {
+  filter: brightness(1.1);
+}
+
+/* Icon bell, search, menu */
+body.dark-mode .navbar .icon-bell,
+body.dark-mode .navbar .icon-menu,
+body.dark-mode .navbar .icon-search,
+body.dark-mode .navbar i {
+  color: #ffffff !important;
+}
+
+/* Search input di navbar */
+body.dark-mode #navbar-search-input {
+  background: #333 !important;
+  border: 1px solid #555 !important;
+  color: #fff !important;
+}
+
+body.dark-mode #navbar-search-input::placeholder {
+  color: #cccccc !important;
+}
+
+/* Dropdown menu */
+body.dark-mode .navbar .dropdown-menu {
+  background: #2a2a2a !important;
+  color: #fff !important;
+  border-color: #444 !important;
+}
+
+body.dark-mode .navbar .dropdown-item {
+  color: #ffffff !important;
+}
+
+body.dark-mode .navbar .dropdown-item:hover {
+  background: #3a3a3a !important;
+}
+
+/* Notifikasi item yang pakai bg-light */
+body.dark-mode .dropdown-item.bg-light {
+  background: #333 !important;
+}
+
+body.dark-mode .dropdown-item .preview-item-content h6,
+body.dark-mode .dropdown-item .preview-item-content p {
+  color: #fff !important;
+}
+/* ===========================================
+   LIGHT MODE — buat teks kartu jadi hitam
+=========================================== */
+body:not(.dark-mode) .card p {
+  color: #111 !important;   /* hitam */
+}
+
+/* untuk angka besar fs-30 */
+body:not(.dark-mode) .card .fs-30 {
+  color: #000 !important;
+}

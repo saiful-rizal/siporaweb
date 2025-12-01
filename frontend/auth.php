@@ -1,32 +1,26 @@
 <?php
 session_start();
- require_once __DIR__ . '../config/db.php';
+require_once __DIR__ . '/includes/config.php';
 
-
-// Fungsi pembersih input sederhana
 function clean_input($data) {
   return htmlspecialchars(trim($data), ENT_QUOTES, 'UTF-8');
 }
 
-// Fungsi cek email SSO (.ac.id)
 function is_sso_email($email) {
   return preg_match('/\.ac\.id$/', $email);
 }
 
-// ====================== LOGIN LOGIC ====================== //
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'login') {
   $username = clean_input($_POST['username']);
   $password = clean_input($_POST['password']);
   $remember = isset($_POST['remember']) ? 1 : 0;
 
   try {
-    // Ambil user tanpa filter status agar bisa dicek kondisinya
     $stmt = $pdo->prepare("SELECT * FROM users WHERE username = :username LIMIT 1");
     $stmt->execute(['username' => $username]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if ($user) {
-      // Cek status akun
       if ($user['status'] === 'pending') {
         $login_error = "Akun Anda masih menunggu persetujuan admin. Silakan coba lagi nanti.";
       } elseif ($user['status'] === 'rejected') {
@@ -34,19 +28,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
       } elseif (!is_sso_email($user['email'])) {
         $login_error = "Akses ditolak! Hanya pengguna dengan email SSO (.ac.id) yang diizinkan.";
       } elseif (password_verify($password, $user['password_hash'])) {
-        // Simpan sesi
         $_SESSION['user_id'] = $user['id_user'];
         $_SESSION['username'] = $user['username'];
         $_SESSION['email'] = $user['email'];
         $_SESSION['role'] = $user['role'];
         $_SESSION['login_time'] = time();
 
-        // Remember me
         if ($remember) {
           setcookie('username', $username, time() + (86400 * 30), "/");
         }
 
-        // Redirect sesuai role
         if ($user['role'] == 'admin') {
           header("Location: ../backend/dist/index.php");
         } else {
@@ -64,39 +55,65 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
   }
 }
 
-// ====================== REGISTER LOGIC ====================== //
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'register') {
   $nama = trim($_POST['nama_lengkap']);
   $nim = trim($_POST['nomor_induk']);
+  // keep the original cleaned values for storage/display but normalize for comparisons
   $username = clean_input($_POST['username']);
   $email = clean_input($_POST['email']);
+  $normalizedFullname = strtolower(trim($nama));
+  $normalizedEmail = strtolower(trim($email));
+  $normalizedUsername = strtolower(trim($username));
   $password = clean_input($_POST['password']);
   $confirm_password = clean_input($_POST['confirmPassword']);
 
   if (!is_sso_email($email)) {
     $register_error = "Gunakan email kampus (.ac.id) untuk mendaftar.";
   } elseif ($password !== $confirm_password) {
-    $register_error = "Password dan konfirmasi tidak cocok.";
+    $register_error = "Password dan konfirmasi tidak sama.";
   } else {
     try {
-      $stmt = $pdo->prepare("SELECT * FROM users WHERE email = :email OR username = :username");
-      $stmt->execute(['email' => $email, 'username' => $username]);
+      // Use case-insensitive check to prevent duplicate accounts differing only by case
+      $stmt = $pdo->prepare("SELECT * FROM users WHERE LOWER(email) = :email OR LOWER(username) = :username OR LOWER(nama_lengkap) = :nama_lengkap LIMIT 1");
+      $stmt->execute(['email' => $normalizedEmail, 'username' => $normalizedUsername, 'nama_lengkap' => $normalizedFullname]);
       $existing = $stmt->fetch(PDO::FETCH_ASSOC);
 
       if ($existing) {
-        $register_error = "Email atau username sudah terdaftar.";
+        // More helpful duplicate detection (email or username)
+        $existingEmail = isset($existing['email']) ? strtolower(trim($existing['email'])) : '';
+        $existingUsername = isset($existing['username']) ? strtolower(trim($existing['username'])) : '';
+        $existingFullname = isset($existing['nama_lengkap']) ? strtolower(trim($existing['nama_lengkap'])) : '';
+
+        if ($existingEmail === $normalizedEmail && $existingUsername === $normalizedUsername && $existingFullname === $normalizedFullname) {
+          $register_error = "Nama, email, dan username sudah terdaftar.";
+        } elseif ($existingFullname === $normalizedFullname && $existingEmail === $normalizedEmail && $existingUsername !== $normalizedUsername) {
+          $register_error = "Nama & email sudah terdaftar.";
+        } elseif ($existingFullname === $normalizedFullname && $existingUsername === $normalizedUsername && $existingEmail !== $normalizedEmail) {
+          $register_error = "Nama & username sudah terdaftar.";
+        } elseif ($existingEmail === $normalizedEmail && $existingUsername === $normalizedUsername) {
+          $register_error = "Email dan username sudah terdaftar.";
+        } elseif ($existingFullname === $normalizedFullname) {
+          $register_error = "Nama lengkap sudah terdaftar.";
+        } elseif ($existingEmail === $normalizedEmail) {
+          $register_error = "Email sudah terdaftar.";
+        } elseif ($existingUsername === $normalizedUsername) {
+          $register_error = "Username sudah terdaftar.";
+        } else {
+            $register_error = "Email atau username sudah terdaftar.";
+        }
       } else {
         $hashed_password = password_hash($password, PASSWORD_DEFAULT);
         $role = 'mahasiswa';
-        $status = "pending"; // Akun menunggu persetujuan admin
+        $status = "pending";
 
         $insert = $pdo->prepare("
-          INSERT INTO users (nama_lengkap, nomor_induk, email, username, password_hash, role, status, created_at)
-          VALUES (:nama_lengkap, :nomor_induk, :email, :username, :password_hash, :role, :status, NOW())
+          INSERT INTO users (nama_lengkap, nim, email, username, password_hash, role, status, created_at)
+          VALUES (:nama_lengkap, :nim, :email, :username, :password_hash, :role, :status, NOW())
         ");
-        $insert->execute([
+        try {
+          $insert->execute([
           'nama_lengkap' => $nama,
-          'nomor_induk' => $nim,
+          'nim' => $nim,
           'email' => $email,
           'username' => $username,
           'password_hash' => $hashed_password,
@@ -104,7 +121,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
           'status' => $status
         ]);
 
-        $register_success = "Registrasi berhasil! Akun Anda sedang menunggu persetujuan admin sebelum bisa login.";
+        } catch (PDOException $e) {
+          // If the DB has unique constraints, duplicate inserts may still throw.
+          // Provide a friendly error and log the exception.
+          error_log('Registration insert failed: ' . $e->getMessage());
+          if ($e->getCode() === '23000') { // SQLSTATE for integrity constraint violation
+            $register_error = 'Gagal mendaftar akun anda telah digunakan';
+          } else {
+            $register_error = "Terjadi kesalahan database saat mendaftar.";
+          }
+        }
+
+        // successful insert may still have been handled above; only set success if no error
+        if (empty($register_error)) {
+          $register_success = "Registrasi berhasil! Akun Anda sedang menunggu persetujuan admin sebelum bisa login.";
+        }
       }
     } catch (PDOException $e) {
       $register_error = "Terjadi kesalahan database: " . $e->getMessage();
@@ -112,7 +143,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
   }
 }
 
-// ====================== LOGOUT LOGIC ====================== //
 if (isset($_GET['logout'])) {
   session_destroy();
   setcookie('username', '', time() - 3600, "/");
@@ -120,7 +150,6 @@ if (isset($_GET['logout'])) {
   exit();
 }
 
-// ====================== AUTO LOGIN COOKIE ====================== //
 if (!isset($_SESSION['user_id']) && isset($_COOKIE['username'])) {
   $username = $_COOKIE['username'];
   $stmt = $pdo->prepare("SELECT * FROM users WHERE username = :username AND status = 'approved'");
@@ -138,8 +167,6 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['username'])) {
   }
 }
 ?>
-
-
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -151,7 +178,6 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['username'])) {
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
-    /* --- Global Variables & Styles --- */
     :root {
       --primary-blue: #0058e4;
       --primary-light: #e9f0ff;
@@ -186,7 +212,6 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['username'])) {
       overflow: hidden;
     }
 
-    /* --- Background Pattern --- */
     .bg-pattern {
       position: absolute;
       top: 0;
@@ -201,7 +226,6 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['username'])) {
       background-size: 100px 100px;
     }
 
-    /* --- Background Animation --- */
     .bg-animation {
       position: absolute;
       top: 0;
@@ -267,15 +291,19 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['username'])) {
       }
     }
 
-    /* --- Login Container --- */
     .login-container {
       position: relative;
       z-index: 1;
       width: 100%;
       max-width: 900px;
+      opacity: 0;
+      transition: opacity 0.5s ease-in-out;
     }
 
-    /* --- Login Card --- */
+    .login-container.show {
+      opacity: 1;
+    }
+
     .login-card {
       background-color: var(--white);
       border-radius: 20px;
@@ -601,7 +629,6 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['username'])) {
       margin-right: 6px;
     }
 
-    /* --- Progress Indicator --- */
     .progress-container {
       margin-top: 20px;
       margin-bottom: 20px;
@@ -629,7 +656,6 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['username'])) {
       color: var(--text-secondary);
     }
 
-    /* --- Responsive Design --- */
     @media (max-width: 768px) {
       .login-card {
         flex-direction: column;
@@ -684,13 +710,137 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['username'])) {
         align-items: flex-start;
       }
     }
+
+    #splash-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--gradient-primary);
+      z-index: 9999;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      color: white;
+      transition: opacity 0.5s ease-out;
+    }
+
+    #splash-screen.hide {
+      opacity: 0;
+      pointer-events: none;
+    }
+    
+    .splash-logo {
+      width: 150px;
+      height: 150px;
+      background-color: rgba(255, 255, 255, 0.2);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+      transform: scale(0);
+      opacity: 0;
+      transition: transform 0.6s ease-out, opacity 0.6s ease-out;
+    }
+
+    .splash-logo.show {
+      transform: scale(1);
+      opacity: 1;
+    }
+
+    .splash-logo img {
+      width: 100px;
+      height: auto;
+    }
+
+    .splash-title {
+      font-size: 2.5rem;
+      font-weight: 700;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      transform: translateX(-50px);
+      opacity: 0;
+      transition: transform 0.6s ease-out 0.2s, opacity 0.6s ease-out 0.2s;
+    }
+
+    .splash-title.show {
+      transform: translateX(0);
+      opacity: 1;
+    }
+
+    .splash-subtitle {
+      font-size: 1rem;
+      opacity: 0.9;
+      margin-top: 10px;
+      transform: translateX(50px);
+      opacity: 0;
+      transition: transform 0.6s ease-out 0.4s, opacity 0.6s ease-out 0.4s;
+    }
+
+    .splash-subtitle.show {
+      transform: translateX(0);
+      opacity: 0.9;
+    }
+    
+    .splash-progress {
+      position: absolute;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 200px;
+      height: 4px;
+      background-color: rgba(255, 255, 255, 0.3);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .splash-progress-bar {
+      height: 100%;
+      background-color: white;
+      width: 0;
+      transition: width 2s linear;
+    }
+
+    /* Registration success overlay (opening) */
+    .register-success-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 12000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+
+    .register-success-overlay.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .register-success-card {
+      background: white;
+      padding: 28px 30px;
+      border-radius: 12px;
+      max-width: 520px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+      text-align: center;
+    }
+
+    .register-success-card h2 { margin-bottom: 8px; color: var(--primary-blue); }
+    .register-success-card p { color: var(--text-secondary); margin-bottom: 18px; }
+    .register-success-actions { display:flex; gap:10px; justify-content:center; }
+    .register-success-actions .btn { padding: 10px 16px; border-radius: 8px; border: 0; cursor: pointer; }
+    .btn-outline { background: transparent; border: 1px solid var(--border-color); }
   </style>
 </head>
 <body>
-  <!-- Background Pattern -->
   <div class="bg-pattern"></div>
   
-  <!-- Background Animation -->
   <div class="bg-animation">
     <div class="bg-circle"></div>
     <div class="bg-circle"></div>
@@ -698,11 +848,19 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['username'])) {
     <div class="bg-circle"></div>
   </div>
 
-  <!-- Login Container -->
+  <div id="splash-screen">
+    <div class="splash-logo">
+      <img src="assets/logo_polije.png" alt="Logo Polije">
+    </div>
+    <h1 class="splash-title">SIPORA</h1>
+    <p class="splash-subtitle">Sistem Informasi Politeknik Negeri Jember Repository Assets</p>
+    <div class="splash-progress">
+      <div class="splash-progress-bar"></div>
+    </div>
+  </div>
+
   <div class="login-container">
-    <!-- Login Card -->
     <div class="login-card">
-      <!-- Left Side -->
       <div class="login-card-left">
         <div class="login-card-left-content">
           <div class="logo-container">
@@ -715,15 +873,12 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['username'])) {
         </div>
       </div>
 
-      <!-- Right Side -->
       <div class="login-card-right">
-        <!-- Tabs -->
         <div class="login-tabs">
           <div class="login-tab active" id="loginTab" onclick="switchTab('login')">Masuk</div>
           <div class="login-tab" id="registerTab" onclick="switchTab('register')">Daftar</div>
         </div>
 
-        <!-- Login Form -->
         <div id="loginForm" class="form-container">
           <?php if (isset($login_error)): ?>
             <div class="alert alert-error">
@@ -732,7 +887,7 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['username'])) {
             </div>
           <?php endif; ?>
           
-          <form method="POST" action="">
+          <form id="loginFormElement" method="POST" action="">
             <input type="hidden" name="action" value="login">
             
             <div class="form-group">
@@ -770,7 +925,7 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['username'])) {
                 <input type="checkbox" id="remember" name="remember" <?php echo isset($_COOKIE['username']) ? 'checked' : ''; ?>>
                 <label for="remember">Ingat saya</label>
               </div>
-              <a href="#" class="forgot-password">Lupa kata sandi?</a>
+              <a href="lupa_password.php" class="forgot-password">Lupa kata sandi?</a>
             </div>
 
             <button type="submit" class="btn-primary">Masuk</button>
@@ -785,7 +940,6 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['username'])) {
           </div>
         </div>
 
-        <!-- Register Form -->
         <div id="registerForm" class="form-container" style="display: none;">
           <?php if (isset($register_error)): ?>
             <div class="alert alert-error">
@@ -801,7 +955,7 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['username'])) {
             </div>
           <?php endif; ?>
           
-          <form method="POST" action="">
+          <form id="registerFormElement" method="POST" action="">
             <input type="hidden" name="action" value="register">
             
             <div class="form-group">
@@ -813,7 +967,12 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['username'])) {
                 class="form-input"
                 placeholder="Masukkan nama lengkap"
                 required
+                onblur="validateFullname()"
               >
+              <div id="namaWarning" class="email-warning hidden">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span>Nama sudah terdaftar</span>
+              </div>
             </div>
 
             <div class="form-group">
@@ -896,6 +1055,11 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['username'])) {
                   <i class="bi bi-eye" id="confirm_password-icon"></i>
                 </button>
               </div>
+              <!-- Inline password match confirmation -->
+              <div id="passwordMatchWarning" class="email-warning" style="display:none; margin-top:8px;">
+                <i id="passwordMatchIcon" class="fas fa-exclamation-triangle" style="margin-right:6px;"></i>
+                <span id="passwordMatchText">Kata sandi tidak sama</span>
+              </div>
             </div>
 
             <div class="form-options">
@@ -905,7 +1069,6 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['username'])) {
               </div>
             </div>
 
-            <!-- Progress Indicator -->
             <div class="progress-container">
               <div class="progress-bar">
                 <div class="progress-fill" id="progressFill"></div>
@@ -916,15 +1079,73 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['username'])) {
               </div>
             </div>
 
-            <button type="submit" class="btn-primary">Daftar</button>
+            <button type="submit" id="registerSubmitBtn" class="btn-primary">Daftar</button>
           </form>
         </div>
       </div>
     </div>
   </div>
 
+  <!-- Registration success overlay (opening) -->
+  <div id="registerSuccessModal" class="register-success-overlay" style="display:none;">
+    <div class="register-success-card" role="dialog" aria-modal="true" aria-labelledby="registerSuccessTitle">
+      <h2 id="registerSuccessTitle">Pendaftaran Berhasil 🎉</h2>
+      <p id="registerSuccessMessage">Akun Anda berhasil didaftarkan dan sedang menunggu persetujuan admin. Silakan cek email Anda untuk konfirmasi.</p>
+      <div class="register-success-actions">
+        <button id="goToLoginBtn" class="btn btn-primary">Masuk Sekarang</button>
+        <button id="closeSuccessBtn" class="btn btn-outline">Tutup</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Password mismatch confirmation modal -->
+  <div id="passwordMismatchModal" class="register-success-overlay" style="display:none;">
+    <div class="register-success-card" role="dialog" aria-modal="true" aria-labelledby="passwordMismatchTitle">
+      <h2 id="passwordMismatchTitle" style="color:#dc2626">Kata sandi tidak sama</h2>
+      <p id="passwordMismatchMessage">Pastikan kata sandi dan konfirmasi kata sandi sama sebelum melanjutkan.</p>
+      <div class="register-success-actions">
+        <button id="pwMismatchOkBtn" class="btn btn-primary">Oke, perbaiki</button>
+      </div>
+    </div>
+  </div>
+
   <script>
-    // Form progress tracking
+    window.addEventListener('load', function() {
+      const splashScreen = document.getElementById('splash-screen');
+      const loginContainer = document.querySelector('.login-container');
+      const logo = splashScreen.querySelector('.splash-logo');
+      const title = splashScreen.querySelector('.splash-title');
+      const subtitle = splashScreen.querySelector('.splash-subtitle');
+      const progressBar = splashScreen.querySelector('.splash-progress-bar');
+      
+      const splashDuration = 2500;
+
+      setTimeout(() => {
+        logo.classList.add('show');
+      }, 100);
+
+      setTimeout(() => {
+        title.classList.add('show');
+      }, 200); 
+
+      setTimeout(() => {
+        subtitle.classList.add('show');
+      }, 400);
+      
+      setTimeout(() => {
+        progressBar.style.width = '100%';
+      }, 500);
+
+      setTimeout(() => {
+        splashScreen.style.opacity = '0';
+        loginContainer.style.opacity = '1';
+
+        setTimeout(() => {
+          splashScreen.remove();
+        }, 500);
+      }, splashDuration);
+    });
+
     let currentStep = 0;
     const totalSteps = 5;
     const formFields = [
@@ -936,12 +1157,10 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['username'])) {
       'confirm_password'
     ];
 
-    // Update progress when form fields are filled
     function updateProgress() {
       const form = document.getElementById('registerFormElement');
       let filledFields = 0;
       
-      // Check each field if it's filled
       formFields.forEach(fieldId => {
         const field = document.getElementById(fieldId);
         if (field && field.value.trim() !== '') {
@@ -949,16 +1168,13 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['username'])) {
         }
       });
       
-      // Check if terms are agreed
       const agreeTerms = document.getElementById('agreeTerms');
       if (agreeTerms && agreeTerms.checked) {
         filledFields++;
       }
       
-      // Calculate progress percentage
       const progress = Math.round((filledFields / totalSteps) * 100);
       
-      // Update progress bar
       const progressFill = document.getElementById('progressFill');
       const progressText = document.getElementById('progressText');
       const progressStep = document.getElementById('progressStep');
@@ -968,7 +1184,6 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['username'])) {
       progressStep.textContent = `Langkah ${filledFields} dari ${totalSteps}`;
     }
 
-    // Add event listeners to form fields
     document.addEventListener('DOMContentLoaded', function() {
       formFields.forEach(fieldId => {
         const field = document.getElementById(fieldId);
@@ -983,7 +1198,77 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['username'])) {
       }
     });
 
-    // Tab switching
+    // Password match validation for registration (real-time)
+    function checkPasswordMatch() {
+      const pwd = document.getElementById('reg_password');
+      const confirm = document.getElementById('confirm_password');
+      const warning = document.getElementById('passwordMatchWarning');
+      const text = document.getElementById('passwordMatchText');
+      const submitBtn = document.getElementById('registerSubmitBtn');
+
+      if (!pwd || !confirm || !warning || !submitBtn) return;
+
+      const a = pwd.value.trim();
+      const b = confirm.value.trim();
+
+      // If confirmation field is still empty, don't show any inline hint
+      if (b === '') {
+        warning.style.display = 'none';
+        updateRegisterButtonState();
+        return;
+      }
+
+      if (a !== b) {
+        // show mismatch
+        warning.style.display = 'flex';
+        warning.style.color = '#dc2626';
+        text.textContent = 'Kata sandi tidak sama';
+        // update icon to warning
+        const iconEl = document.getElementById('passwordMatchIcon');
+        if (iconEl) {
+          iconEl.className = 'fas fa-exclamation-triangle';
+        }
+        // leave disabling decision to updateRegisterButtonState (considers other flags)
+        updateRegisterButtonState();
+      } else {
+        // show matched confirmation (brief)
+        warning.style.display = 'flex';
+        warning.style.color = '#16a34a';
+        text.textContent = 'Kata sandi sama';
+        // update icon to check
+        const iconEl = document.getElementById('passwordMatchIcon');
+        if (iconEl) {
+          iconEl.className = 'fas fa-check-circle';
+        }
+        updateRegisterButtonState();
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      const pwd = document.getElementById('reg_password');
+      const confirm = document.getElementById('confirm_password');
+      const registerForm = document.getElementById('registerFormElement');
+
+      if (pwd) pwd.addEventListener('input', checkPasswordMatch);
+      if (confirm) confirm.addEventListener('input', checkPasswordMatch);
+
+      // Prevent submit on mismatch as a safety
+      if (registerForm) {
+        registerForm.addEventListener('submit', function(e) {
+          const pwdVal = document.getElementById('reg_password').value.trim();
+          const confVal = document.getElementById('confirm_password').value.trim();
+          if (pwdVal !== confVal) {
+            e.preventDefault();
+            checkPasswordMatch();
+            // Show a clear mismatch confirmation modal
+            showPasswordMismatchModal();
+            return false;
+          }
+          return true;
+        });
+      }
+    });
+
     function switchTab(tab) {
       const loginTab = document.getElementById('loginTab');
       const registerTab = document.getElementById('registerTab');
@@ -1000,12 +1285,10 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['username'])) {
         registerTab.classList.add('active');
         loginForm.style.display = 'none';
         registerForm.style.display = 'block';
-        // Reset progress when switching to register tab
         updateProgress();
       }
     }
 
-    // Toggle password visibility
     function togglePassword(inputId) {
       const input = document.getElementById(inputId);
       const icon = document.getElementById(inputId + '-icon');
@@ -1021,37 +1304,127 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['username'])) {
       }
     }
 
-    // Validate username
-    function validateUsername() {
-      const username = document.getElementById('reg_username').value;
+    // Track duplicate flags
+    let usernameTaken = false;
+    let emailTaken = false;
+    let nameTaken = false;
+
+    async function checkAvailability(payload) {
+      try {
+        const res = await fetch('check_user_exists.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        return await res.json();
+      } catch (err) {
+        console.error('Check availability failed', err);
+        return { success: false, exists: false };
+      }
+    }
+
+    function updateRegisterButtonState() {
+      const submitBtn = document.getElementById('registerSubmitBtn');
+      // also check password mismatch state
+      const pwd = document.getElementById('reg_password');
+      const conf = document.getElementById('confirm_password');
+      const pwMismatch = (pwd && conf) ? (pwd.value.trim() !== conf.value.trim()) : false;
+
+      if (!submitBtn) return;
+      submitBtn.disabled = usernameTaken || emailTaken || nameTaken || pwMismatch;
+      submitBtn.style.opacity = submitBtn.disabled ? 0.6 : 1;
+    }
+
+    async function validateUsername() {
+      const usernameEl = document.getElementById('reg_username');
       const warning = document.getElementById('usernameWarning');
-      
+      if (!usernameEl) return false;
+
+      const username = usernameEl.value.trim();
+
       if (username.length < 3) {
+        usernameTaken = false;
         warning.classList.remove('hidden');
+        warning.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <span>Username minimal 3 karakter</span>';
+        updateRegisterButtonState();
         return false;
-      } else {
-        warning.classList.add('hidden');
-        return true;
       }
+
+      // check server-side availability
+      const result = await checkAvailability({ username });
+      if (result && result.success && result.exists && result.fields && result.fields.includes('username')) {
+        usernameTaken = true;
+        warning.classList.remove('hidden');
+        warning.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <span>Username sudah terdaftar. Silakan pilih username lain.</span>';
+      } else {
+        usernameTaken = false;
+        warning.classList.add('hidden');
+      }
+
+      updateRegisterButtonState();
+      return !usernameTaken;
     }
 
-    // Validate email
-    function validateEmail() {
-      const email = document.getElementById('email').value;
+    async function validateFullname() {
+      const nameEl = document.getElementById('nama_lengkap');
+      const warning = document.getElementById('namaWarning');
+      if (!nameEl) return false;
+
+      const fullname = nameEl.value.trim();
+
+      if (fullname.length < 3) {
+        nameTaken = false;
+        warning.classList.remove('hidden');
+        warning.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <span>Nama minimal 3 karakter</span>';
+        updateRegisterButtonState();
+        return false;
+      }
+
+      const result = await checkAvailability({ nama_lengkap: fullname });
+      if (result && result.success && result.exists && result.fields && result.fields.includes('nama_lengkap')) {
+        nameTaken = true;
+        warning.classList.remove('hidden');
+        warning.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <span>Nama lengkap sudah terdaftar. Periksa data sebelumnya.</span>';
+      } else {
+        nameTaken = false;
+        warning.classList.add('hidden');
+      }
+
+      updateRegisterButtonState();
+      return !nameTaken;
+    }
+
+    async function validateEmail() {
+      const emailEl = document.getElementById('email');
       const warning = document.getElementById('emailWarning');
-      
+      if (!emailEl) return false;
+
+      const email = emailEl.value.trim();
+
       if (!email.endsWith('.ac.id')) {
+        emailTaken = false;
         warning.classList.remove('hidden');
+        warning.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <span>Hanya email dengan domain .ac.id yang diizinkan</span>';
+        updateRegisterButtonState();
         return false;
-      } else {
-        warning.classList.add('hidden');
-        return true;
       }
+
+      // check server-side availability
+      const result = await checkAvailability({ email });
+      if (result && result.success && result.exists && result.fields && result.fields.includes('email')) {
+        emailTaken = true;
+        warning.classList.remove('hidden');
+        warning.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <span>Email sudah terdaftar. Gunakan email lain atau login.</span>';
+      } else {
+        emailTaken = false;
+        warning.classList.add('hidden');
+      }
+
+      updateRegisterButtonState();
+      return !emailTaken;
     }
 
-    // Initialize Google Sign-In when page loads
     window.onload = function() {
-      // Ganti dengan Client ID Anda dari Google Cloud Console
       const clientId = 'MASUKKAN_CLIENT_ID_ANDA_DISINI';
       
       if (typeof google !== 'undefined') {
@@ -1062,7 +1435,6 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['username'])) {
           cancel_on_tap_outside: false
         });
         
-        // Render the Google Sign-In button
         google.accounts.id.renderButton(
           document.getElementById("googleSignInButton"),
           { 
@@ -1074,18 +1446,15 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['username'])) {
           }
         );
         
-        // Display the One Tap dialog
         setTimeout(function() {
           google.accounts.id.prompt();
         }, 1000);
       }
     }
 
-    // Function to handle Google Sign-In response
     function handleGoogleSignIn(response) {
       console.log('Google Sign-In response:', response);
       
-      // Send the token to your server for verification
       fetch('google_auth.php', {
         method: 'POST',
         headers: {
@@ -1108,6 +1477,63 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['username'])) {
         alert('Terjadi kesalahan saat login dengan Google');
       });
     }
+
+    /* Show registration success overlay */
+    function showRegistrationSuccessModal(message) {
+      const modal = document.getElementById('registerSuccessModal');
+      const msg = document.getElementById('registerSuccessMessage');
+      if (!modal) return;
+      if (msg && message) msg.textContent = message;
+      modal.style.display = 'flex';
+      // small delay to allow CSS transitions
+      setTimeout(() => modal.classList.add('show'), 10);
+
+      const closeBtn = document.getElementById('closeSuccessBtn');
+      const goLogin = document.getElementById('goToLoginBtn');
+
+      if (closeBtn) closeBtn.onclick = () => {
+        modal.classList.remove('show');
+        setTimeout(() => modal.style.display = 'none', 180);
+      };
+
+      if (goLogin) goLogin.onclick = () => {
+        // close modal then switch to login tab
+        if (modal) {
+          modal.classList.remove('show');
+          setTimeout(() => modal.style.display = 'none', 180);
+        }
+        // switch to login tab
+        try { switchTab('login'); } catch (e) { /* ignore */ }
+      };
+    }
+
+    /* Show password mismatch modal */
+    function showPasswordMismatchModal() {
+      const modal = document.getElementById('passwordMismatchModal');
+      if (!modal) return;
+      modal.style.display = 'flex';
+      setTimeout(() => modal.classList.add('show'), 10);
+
+      const okBtn = document.getElementById('pwMismatchOkBtn');
+      if (okBtn) okBtn.onclick = () => {
+        modal.classList.remove('show');
+        setTimeout(() => modal.style.display = 'none', 160);
+        // focus back to confirm field for quicker fix
+        const conf = document.getElementById('confirm_password');
+        if (conf) conf.focus();
+      };
+    }
   </script>
+
+  <?php if (isset($register_success)): ?>
+  <script>
+    // Show the opening/success overlay only when server created $register_success
+    document.addEventListener('DOMContentLoaded', function() {
+      try {
+        showRegistrationSuccessModal(<?php echo json_encode($register_success); ?>);
+      } catch (err) { console.error(err); }
+    });
+  </script>
+  <?php endif; ?>
 </body>
 </html>

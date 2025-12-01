@@ -1,12 +1,14 @@
 <footer class="footer">
+  
   <div class="d-sm-flex justify-content-center justify-content-sm-between">
     <span class="text-muted text-center text-sm-left d-block d-sm-inline-block">
-      © 2025 SIPORA - Sistem Informasi Repository Akademik
+      © 2025 SIPORA - Sistem Informasi Repositori Aset
     </span>
   </div>
 </footer>
 
 <!-- plugins:js -->
+   <link rel="stylesheet" href="assets/css/sipora-admin.css">
 <script src="assets/vendors/js/vendor.bundle.base.js"></script>
 <script src="assets/vendors/chart.js/chart.umd.js"></script>
 <script src="assets/vendors/datatables.net/jquery.dataTables.js"></script>

@@ -1,6 +1,42 @@
 <?php
+// --- Kode asli file upload dimulai dari sini ---
+
 session_start();
-require_once __DIR__ . '/config/db.php';
+require_once __DIR__ . '/includes/config.php';
+require_once __DIR__ . '/includes/functions.php';
+require_once __DIR__ . '/models/UploadModel.php';
+
+// Bagian ini menangani permintaan AJAX untuk mendapatkan data prodi
+// Ini menggantikan fungsi dari file get_prodi.php yang terpisah
+if (isset($_GET['get_prodi']) && isset($_GET['id_jurusan'])) {
+    // Set header untuk respons JSON
+    header('Content-Type: application/json; charset=utf-8');
+    
+    try {
+        // Ambil dan sanitasi input id_jurusan
+        $id_jurusan = intval($_GET['id_jurusan']);
+        
+        // Siapkan query untuk mengambil data prodi berdasarkan id_jurusan
+        $stmt = $pdo->prepare("SELECT id_prodi, nama_prodi FROM master_prodi WHERE id_jurusan = :id_jurusan ORDER BY nama_prodi ASC");
+        
+        // Eksekusi query dengan parameter yang telah disanitasi
+        $stmt->execute(['id_jurusan' => $id_jurusan]);
+        
+        // Ambil semua hasil sebagai array asosiatif
+        $prodi_list = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Kembalikan data dalam format JSON
+        echo json_encode($prodi_list);
+        
+    } catch (PDOException $e) {
+        // Jika terjadi error database, kembalikan error
+        http_response_code(500); // Internal Server Error
+        echo json_encode(['error' => 'Database error: ' . $e->getMessage()]);
+    }
+    
+    // Hentikan eksekusi script agar tidak merender HTML
+    exit();
+}
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: auth.php");
@@ -17,139 +53,26 @@ if (isset($_GET['logout'])) {
  $user_id = $_SESSION['user_id'];
 
 try {
-    $stmt = $pdo->prepare("SELECT id_user, username, email, role FROM users WHERE id_user = :id LIMIT 1");
-    $stmt->execute(['id' => $user_id]);
+    $stmt = $pdo->prepare("SELECT id_user, username, email, role FROM users WHERE id_user = :user_id LIMIT 1");
+    $stmt->execute(['user_id' => $user_id]);
     $user_data = $stmt->fetch(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     die("Database error: " . $e->getMessage());
 }
 
-function getInitialsBackgroundColor($username) {
-    $colors = [
-        '#4285F4', '#1E88E5', '#039BE5', '#00ACC1', '#00BCD4', '#26C6DA', 
-        '#26A69A', '#42A5F5', '#5C6BC0', '#7E57C2', '#9575CD', '#64B5F6'
-    ];
-    
-    $index = 0;
-    for ($i = 0; $i < strlen($username); $i++) {
-        $index += ord($username[$i]);
-    }
-    
-    return $colors[$index % count($colors)];
-}
+// Initialize UploadModel
+ $uploadModel = new UploadModel($pdo);
 
-function getContrastColor($hexColor) {
-    $r = hexdec(substr($hexColor, 1, 2));
-    $g = hexdec(substr($hexColor, 3, 2));
-    $b = hexdec(substr($hexColor, 5, 2));
-    
-    $luminance = (0.299 * $r + 0.587 * $g + 0.114 * $b) / 255;
-    
-    return $luminance > 0.5 ? '#000000' : '#FFFFFF';
-}
+// Get master data
+ $master_data = $uploadModel->getMasterData();
+ $divisi_data = $master_data['divisi'];
+ $jurusan_data = $master_data['jurusan'];
+ $prodi_data = $master_data['prodi'];
+ $tema_data = $master_data['tema'];
+ $tahun_data = $master_data['tahun'];
 
-function hasProfilePhoto($user_id) {
-    $photo_path = __DIR__ . '/uploads/profile_photos/' . $user_id . '.jpg';
-    return file_exists($photo_path);
-}
-
-function getProfilePhotoUrl($user_id, $email, $username) {
-    $photo_path = __DIR__ . '/uploads/profile_photos/' . $user_id . '.jpg';
-    if (file_exists($photo_path)) {
-        return 'uploads/profile_photos/' . $user_id . '.jpg?t=' . time();
-    } else {
-        return 'profile_image.php?id=' . $user_id . '&email=' . urlencode($email) . '&name=' . urlencode($username) . '&t=' . time();
-    }
-}
-
-function getInitialsHtml($username, $size = 'normal') {
-    $username_parts = explode('_', $username);
-    if (count($username_parts) > 1) {
-        $initials = strtoupper(substr($username_parts[0], 0, 1) . substr(end($username_parts), 0, 1));
-    } else {
-        $initials = strtoupper(substr($username, 0, 2));
-    }
-    
-    $bgColor = getInitialsBackgroundColor($username);
-    $textColor = getContrastColor($bgColor);
-    
-    $sizeClass = '';
-    $style = '';
-    
-    switch($size) {
-        case 'small':
-            $sizeClass = 'initials-small';
-            $style = "width: 40px; height: 40px; font-size: 16px;";
-            break;
-        case 'large':
-            $sizeClass = 'initials-large';
-            $style = "width: 100px; height: 100px; font-size: 36px;";
-            break;
-        case 'normal':
-        default:
-            $sizeClass = 'initials-normal';
-            $style = "width: 68px; height: 68px; font-size: 24px;";
-            break;
-    }
-    
-    return "<div class='user-initials {$sizeClass}' style='background-color: {$bgColor}; color: {$textColor}; {$style}'>{$initials}</div>";
-}
-
-function getRoleName($role) {
-    switch($role) {
-        case 1: return 'Admin';
-        case 2: return 'Mahasiswa';
-        case 3: return 'Dosen';
-        default: return 'Pengguna';
-    }
-}
-
-function getStatusBadge($status_id) {
-    switch($status_id) {
-        case 1: return 'badge-success';
-        case 2: return 'badge-warning';
-        case 3: return 'badge-info';
-        default: return 'badge-secondary';
-    }
-}
-
-function getStatusName($status_id) {
-    switch($status_id) {
-        case 1: return 'Diterbitkan';
-        case 2: return 'Review';
-        case 3: return 'Draft';
-        default: return 'Unknown';
-    }
-}
-
-// Fetch master data for dropdowns
-try {
-    $jurusan_data = $pdo->query("SELECT id_jurusan, nama_jurusan FROM master_jurusan ORDER BY nama_jurusan")->fetchAll(PDO::FETCH_ASSOC);
-    $prodi_data = $pdo->query("SELECT id_prodi, nama_prodi FROM master_prodi ORDER BY nama_prodi")->fetchAll(PDO::FETCH_ASSOC);
-    $tema_data = $pdo->query("SELECT id_tema, nama_tema FROM master_tema ORDER BY nama_tema")->fetchAll(PDO::FETCH_ASSOC);
-    
-    // Get tahun data from master_tahun table
-    $tahun_data = $pdo->query("SELECT year_id FROM master_tahun ORDER BY year_id DESC")->fetchAll(PDO::FETCH_ASSOC);
-    
-    // If no years in master_tahun, add current year
-    if (empty($tahun_data)) {
-        $current_year = date('Y');
-        try {
-            $stmt = $pdo->prepare("INSERT INTO master_tahun (year_id) VALUES (:year_id)");
-            $stmt->execute(['year_id' => $current_year]);
-            $tahun_data = [['year_id' => $current_year]];
-        } catch (PDOException $e) {
-            // If insert fails, use fallback
-            $tahun_data = [['year_id' => $current_year]];
-        }
-    }
-} catch (PDOException $e) {
-    $jurusan_data = [];
-    $prodi_data = [];
-    $tema_data = [];
-    // Fallback to current year if there's an error
-    $tahun_data = [['year_id' => date('Y')]];
-}
+// Get user documents
+ $my_documents = $uploadModel->getUserDocuments($user_id);
 
 // Handle document upload
  $upload_success = false;
@@ -160,99 +83,208 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_document'])) {
         $judul = isset($_POST['judul']) ? trim($_POST['judul']) : '';
         $abstrak = isset($_POST['abstrak']) ? trim($_POST['abstrak']) : '';
         $kata_kunci = isset($_POST['kata_kunci']) ? trim($_POST['kata_kunci']) : '';
+        $id_divisi = isset($_POST['id_divisi']) ? $_POST['id_divisi'] : '';
         $id_jurusan = isset($_POST['id_jurusan']) ? $_POST['id_jurusan'] : '';
         $id_prodi = isset($_POST['id_prodi']) ? $_POST['id_prodi'] : '';
         $id_tema = isset($_POST['id_tema']) ? $_POST['id_tema'] : '';
         $year_id = isset($_POST['year_id']) ? $_POST['year_id'] : date('Y');
+        $status_id = isset($_POST['status_id']) ? $_POST['status_id'] : 1;
         
+        // Turnitin percentage - default 0 if empty
+        $turnitin = isset($_POST['turnitin']) ? trim($_POST['turnitin']) : '0';
+        
+        // Validasi semua field wajib diisi kecuali turnitin
         if (empty($judul)) {
             $upload_error = "Judul dokumen tidak boleh kosong";
         } elseif (empty($abstrak)) {
             $upload_error = "Abstrak tidak boleh kosong";
         } elseif (empty($kata_kunci)) {
             $upload_error = "Kata kunci tidak boleh kosong";
+        } elseif (empty($id_divisi)) {
+            $upload_error = "Divisi harus dipilih";
         } elseif (empty($id_jurusan)) {
             $upload_error = "Jurusan harus dipilih";
         } elseif (empty($id_prodi)) {
             $upload_error = "Program studi harus dipilih";
         } elseif (empty($id_tema)) {
             $upload_error = "Tema harus dipilih";
+        } elseif (empty($year_id)) {
+            $upload_error = "Tahun harus dipilih";
         } elseif (!isset($_FILES['file_dokumen']) || $_FILES['file_dokumen']['error'] !== UPLOAD_ERR_OK) {
             $upload_error = "File dokumen harus diunggah";
         } else {
-            $file = $_FILES['file_dokumen'];
-            $fileName = $file['name'];
-            $fileTmpName = $file['tmp_name'];
-            $fileSize = $file['size'];
-            $fileError = $file['error'];
-            
-            $allowedExtensions = ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx'];
-            $fileExtension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
-            
-            if (!in_array($fileExtension, $allowedExtensions)) {
-                $upload_error = "Hanya file PDF, DOC, DOCX, PPT, PPTX, XLS, dan XLSX yang diperbolehkan";
-            } elseif ($fileSize > 10485760) { // 10MB
-                $upload_error = "Ukuran file maksimal 10MB";
-            } else {
-                // Check if year exists in master_tahun table
-                $yearExists = false;
-                foreach ($tahun_data as $tahun) {
-                    if ($tahun['year_id'] == $year_id) {
-                        $yearExists = true;
-                        break;
-                    }
-                }
+            // Validasi turnitin percentage jika diisi
+            if (!empty($turnitin)) {
+                // Hapus karakter % jika ada
+                $turnitin = str_replace('%', '', $turnitin);
                 
-                // If year doesn't exist, add it to master_tahun
-                if (!$yearExists) {
-                    try {
-                        $stmt = $pdo->prepare("INSERT INTO master_tahun (year_id) VALUES (:year_id)");
-                        $stmt->execute(['year_id' => $year_id]);
-                        // Refresh tahun_data
-                        $tahun_data = $pdo->query("SELECT year_id FROM master_tahun ORDER BY year_id DESC")->fetchAll(PDO::FETCH_ASSOC);
-                    } catch (PDOException $e) {
-                        // If insert fails, continue with the year anyway
-                        error_log("Failed to insert year: " . $e->getMessage());
-                    }
-                }
-                
-                // Create upload directory if it doesn't exist
-                $uploadDir = __DIR__ . '/uploads/documents/';
-                if (!file_exists($uploadDir)) {
-                    mkdir($uploadDir, 0755, true);
-                }
-                
-                // Generate unique filename
-                $uniqueFileName = $user_id . '_' . time() . '.' . $fileExtension;
-                $targetPath = $uploadDir . $uniqueFileName;
-                
-                if (move_uploaded_file($fileTmpName, $targetPath)) {
-                    // Insert document data into database
-                    $stmt = $pdo->prepare("
-                        INSERT INTO dokumen (
-                            judul, abstrak, kata_kunci, id_jurusan, id_prodi, id_tema, 
-                            year_id, file_path, uploader_id, tgl_unggah, status_id
-                        ) VALUES (
-                            :judul, :abstrak, :kata_kunci, :id_jurusan, :id_prodi, :id_tema,
-                            :year_id, :file_path, :uploader_id, NOW(), 3
-                        )
-                    ");
-                    
-                    $stmt->execute([
-                        'judul' => $judul,
-                        'abstrak' => $abstrak,
-                        'kata_kunci' => $kata_kunci,
-                        'id_jurusan' => $id_jurusan,
-                        'id_prodi' => $id_prodi,
-                        'id_tema' => $id_tema,
-                        'year_id' => $year_id,
-                        'file_path' => 'uploads/documents/' . $uniqueFileName,
-                        'uploader_id' => $user_id
-                    ]);
-                    
-                    $upload_success = true;
+                // Validasi apakah angka
+                if (!is_numeric($turnitin)) {
+                    $upload_error = "Skor Turnitin harus berupa angka";
+                } elseif ($turnitin < 0 || $turnitin > 100) {
+                    $upload_error = "Skor Turnitin harus antara 0-100";
                 } else {
-                    $upload_error = "Gagal mengunggah file. Silakan coba lagi.";
+                    $turnitin = round($turnitin); // Bulatkan ke integer
+                }
+            } else {
+                $turnitin = 0;
+            }
+            
+            // Validasi file Turnitin jika diunggah
+            $turnitin_file = ''; // Diubah dari turnitin_file_path menjadi turnitin_file
+            if (isset($_FILES['turnitin_file']) && $_FILES['turnitin_file']['error'] !== UPLOAD_ERR_NO_FILE) {
+                if ($_FILES['turnitin_file']['error'] !== UPLOAD_ERR_OK) {
+                    $upload_error = "Error saat mengunggah file Turnitin";
+                } else {
+                    $turnitin_fileData = $_FILES['turnitin_file'];
+                    $turnitin_fileName = $turnitin_fileData['name'];
+                    $turnitin_fileTmpName = $turnitin_fileData['tmp_name'];
+                    $turnitin_fileSize = $turnitin_fileData['size'];
+                    $turnitin_fileExtension = strtolower(pathinfo($turnitin_fileName, PATHINFO_EXTENSION));
+                    
+                    $allowedTurnitinExtensions = ['pdf', 'doc', 'docx'];
+                    
+                    if (!in_array($turnitin_fileExtension, $allowedTurnitinExtensions)) {
+                        $upload_error = "File Turnitin hanya boleh berformat PDF, DOC, atau DOCX";
+                    } elseif ($turnitin_fileSize > 5242880) { // 5MB
+                        $upload_error = "Ukuran file Turnitin maksimal 5MB";
+                    }
+                }
+            }
+            
+            if (empty($upload_error)) {
+                $file = $_FILES['file_dokumen'];
+                $fileName = $file['name'];
+                $fileTmpName = $file['tmp_name'];
+                $fileSize = $file['size'];
+                $fileError = $file['error'];
+                
+                $allowedExtensions = ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx'];
+                $fileExtension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+                
+                if (!in_array($fileExtension, $allowedExtensions)) {
+                    $upload_error = "Hanya file PDF, DOC, DOCX, PPT, PPTX, XLS, dan XLSX yang diperbolehkan";
+                } elseif ($fileSize > 10485760) { // 10MB
+                    $upload_error = "Ukuran file maksimal 10MB";
+                } else {
+                    // Ensure year exists in master_tahun table
+                    $uploadModel->ensureYearExists($year_id);
+                    
+                    // Create upload directory if it doesn't exist
+                    $uploadDir = __DIR__ . '/uploads/documents/';
+                    if (!file_exists($uploadDir)) {
+                        mkdir($uploadDir, 0755, true);
+                    }
+                    
+                    // Create turnitin directory if it doesn't exist
+                    $turnitinDir = __DIR__ . '/uploads/turnitin/';
+                    if (!file_exists($turnitinDir)) {
+                        mkdir($turnitinDir, 0755, true);
+                    }
+                    
+                    // Generate unique filename for document
+                    $uniqueFileName = $user_id . '_' . time() . '.' . $fileExtension;
+                    $targetPath = $uploadDir . $uniqueFileName;
+                    
+                    // Generate unique filename for turnitin file if uploaded
+                    $uniqueTurnitinFileName = '';
+                    if (isset($_FILES['turnitin_file']) && $_FILES['turnitin_file']['error'] !== UPLOAD_ERR_NO_FILE) {
+                        $turnitin_fileExtension = strtolower(pathinfo($_FILES['turnitin_file']['name'], PATHINFO_EXTENSION));
+                        $uniqueTurnitinFileName = $user_id . '_turnitin_' . time() . '.' . $turnitin_fileExtension;
+                        $turnitinTargetPath = $turnitinDir . $uniqueTurnitinFileName;
+                    }
+                    
+                    if (move_uploaded_file($fileTmpName, $targetPath)) {
+                        // Move turnitin file if uploaded
+                        if (!empty($uniqueTurnitinFileName) && isset($_FILES['turnitin_file'])) {
+                            if (!move_uploaded_file($_FILES['turnitin_file']['tmp_name'], $turnitinTargetPath)) {
+                                $upload_error = "Gagal mengunggah file Turnitin. Silakan coba lagi.";
+                            } else {
+                                $turnitin_file = $uniqueTurnitinFileName; // Diubah dari turnitin_file_path menjadi turnitin_file
+                            }
+                        }
+                        
+                        if (empty($upload_error)) {
+                          // Insert document data into database
+                          $upload_success = $uploadModel->uploadDocument([
+                                'judul' => $judul,
+                                'abstrak' => $abstrak,
+                                'kata_kunci' => $kata_kunci,
+                                'id_divisi' => $id_divisi,
+                                'id_jurusan' => $id_jurusan,
+                                'id_prodi' => $id_prodi,
+                                'id_tema' => $id_tema,
+                                'year_id' => $year_id,
+                                'file_path' => $uniqueFileName,
+                                'turnitin_file' => $turnitin_file, // Diubah dari turnitin_file_path menjadi turnitin_file
+                                'uploader_id' => $user_id,
+                                'status_id' => $status_id,
+                                'turnitin' => $turnitin
+                            ]);
+
+                              // Jika upload berhasil, simpan notifikasi (jika tabel notifications ada atau buat otomatis)
+                              if ($upload_success) {
+                                try {
+                                  // Pastikan tabel notifications ada
+                                  $createSql = "CREATE TABLE IF NOT EXISTS notifications (
+                                    id INT AUTO_INCREMENT PRIMARY KEY,
+                                    user_id INT NULL,
+                                    actor_id INT NULL,
+                                    doc_id INT NULL,
+                                    type VARCHAR(50) DEFAULT NULL,
+                                    title VARCHAR(255) DEFAULT NULL,
+                                    message TEXT DEFAULT NULL,
+                                    icon_type VARCHAR(50) DEFAULT NULL,
+                                    icon_class VARCHAR(100) DEFAULT NULL,
+                                    status_name VARCHAR(100) DEFAULT NULL,
+                                    is_read TINYINT(1) DEFAULT 0,
+                                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                                  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
+                                  $pdo->exec($createSql);
+
+                                  // Cari dokumen yang baru saja diunggah untuk mendapatkan dokumen_id
+                                  $stmtDoc = $pdo->prepare("SELECT dokumen_id FROM dokumen WHERE uploader_id = :uploader_id AND file_path = :file_path ORDER BY tgl_unggah DESC LIMIT 1");
+                                  $stmtDoc->execute(['uploader_id' => $user_id, 'file_path' => $uniqueFileName]);
+                                  $newDoc = $stmtDoc->fetch(PDO::FETCH_ASSOC);
+                                  $newDocId = $newDoc ? $newDoc['dokumen_id'] : null;
+
+                                  // Notifikasi global: dokumen baru
+                                  $title = 'Dokumen Baru';
+                                  $message = "<strong>" . htmlspecialchars($user_data['username']) . "</strong> mengunggah dokumen: \"" . htmlspecialchars($judul) . "\"";
+                                  $stmtNotif = $pdo->prepare("INSERT INTO notifications (user_id, actor_id, doc_id, type, title, message, icon_type, icon_class, created_at) VALUES (NULL, :actor_id, :doc_id, :type, :title, :message, :icon_type, :icon_class, NOW())");
+                                  $stmtNotif->execute([
+                                    'actor_id' => $user_id,
+                                    'doc_id' => $newDocId,
+                                    'type' => 'upload',
+                                    'title' => $title,
+                                    'message' => $message,
+                                    'icon_type' => 'info',
+                                    'icon_class' => 'bi-file-earmark-plus'
+                                  ]);
+
+                                  // Notifikasi untuk pengunggah (konfirmasi)
+                                  $title2 = 'Upload Berhasil';
+                                  $message2 = "Dokumen \"" . htmlspecialchars($judul) . "\" berhasil diunggah.";
+                                  $stmtNotif2 = $pdo->prepare("INSERT INTO notifications (user_id, actor_id, doc_id, type, title, message, icon_type, icon_class, created_at) VALUES (:user_id, :actor_id, :doc_id, :type, :title, :message, :icon_type, :icon_class, NOW())");
+                                  $stmtNotif2->execute([
+                                    'user_id' => $user_id,
+                                    'actor_id' => $user_id,
+                                    'doc_id' => $newDocId,
+                                    'type' => 'upload_confirm',
+                                    'title' => $title2,
+                                    'message' => $message2,
+                                    'icon_type' => 'success',
+                                    'icon_class' => 'bi-check-circle-fill'
+                                  ]);
+                                } catch (Exception $e) {
+                                  // Jangan ganggu alur upload jika notifikasi gagal
+                                  error_log('Notif creation failed: ' . $e->getMessage());
+                                }
+                              }
+                        }
+                    } else {
+                        $upload_error = "Gagal mengunggah file. Silakan coba lagi.";
+                    }
                 }
             }
         }
@@ -264,34 +296,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_document'])) {
         error_log("General error: " . $e->getMessage());
     }
 }
-
-// Fetch user's uploaded documents
- $my_documents = [];
-try {
-    $stmt = $pdo->prepare("
-        SELECT 
-            d.dokumen_id AS id_book, 
-            d.judul AS title, 
-            d.abstrak AS abstract,
-            d.kata_kunci AS keywords,
-            (SELECT nama_jurusan FROM master_jurusan WHERE id_jurusan = d.id_jurusan) AS department,
-            (SELECT nama_prodi FROM master_prodi WHERE id_prodi = d.id_prodi) AS prodi,
-            (SELECT nama_tema FROM master_tema WHERE id_tema = d.id_tema) AS tema,
-            d.year_id AS year,
-            d.file_path AS file_path,
-            d.tgl_unggah AS upload_date,
-            d.status_id AS status_id,
-            (SELECT COUNT(*) FROM download_history WHERE dokumen_id = d.dokumen_id) AS download_count
-        FROM dokumen d
-        WHERE d.uploader_id = :user_id
-        ORDER BY d.tgl_unggah DESC
-    ");
-    $stmt->execute(['user_id' => $user_id]);
-    $my_documents = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    $my_documents = [];
-    error_log("Error fetching documents: " . $e->getMessage());
-}
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -301,915 +305,117 @@ try {
   <title>SIPORA | Upload Dokumen</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="assets/css/styles.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  
+  <!-- CSS tambahan untuk memperbaiki dropdown -->
   <style>
-    :root {
-      --primary-blue: #0058e4;
-      --primary-light: #e9f0ff;
-      --light-blue: #64B5F6;
-      --background-page: #f5f7fa;
-      --white: #ffffff;
-      --text-primary: #222222;
-      --text-secondary: #666666;
-      --text-muted: #555555;
-      --border-color: #dcdcdc;
-      --shadow-sm: 0 2px 8px rgba(0,0,0,0.05);
-      --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
-      --success-color: #28a745;
-      --warning-color: #ffc107;
-      --danger-color: #dc3545;
-    }
-
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    
-    body {
-      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background-color: var(--background-page);
-      color: var(--text-primary);
+    /* Memastikan semua select dropdown hanya membuka ke bawah */
+    select.form-control {
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+      background-repeat: no-repeat;
+      background-position: right 0.5rem center;
+      background-size: 1.5em 1.5em;
+      padding-right: 2.5rem;
+      /* Memastikan dropdown hanya membuka ke bawah */
       position: relative;
-    }
-
-    .user-initials {
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      transition: transform 0.2s ease;
-      background-color: var(--light-blue);
-      color: white;
+      z-index: 1;
     }
     
-    .user-initials:hover {
-      transform: scale(1.05);
+    /* Menghilangkan panah dropdown default dan menggunakan custom */
+    select.form-control::-ms-expand {
+      display: none;
     }
     
-    .user-initials-small {
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      background-color: var(--light-blue);
-      color: white;
+    /* Memastikan dropdown tidak membuka ke atas */
+    select.form-control:focus {
+      z-index: 1;
     }
     
-    .user-initials-large {
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 2px;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-      background-color: var(--light-blue);
-      color: white;
+    /* Memastikan dropdown Bootstrap hanya membuka ke bawah */
+    .dropdown-menu {
+      top: 100% !important;
+      bottom: auto !important;
+      transform: none !important;
     }
-
-    .bg-animation {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: -1;
-      overflow: hidden;
-      pointer-events: none;
+    
+    /* Untuk dropdown di bagian bawah halaman */
+    .dropup .dropdown-menu {
+      top: auto !important;
+      bottom: 100% !important;
     }
-
-    .bg-circle {
-      position: absolute;
-      border-radius: 50%;
-      opacity: 0.03;
-      animation: float 25s infinite ease-in-out;
+    
+    /* Memastikan accordion hanya membuka ke bawah */
+    .accordion-item {
+      overflow: visible;
     }
-
-    .bg-circle:nth-child(1) {
-      width: 300px;
-      height: 300px;
-      background: var(--primary-blue);
-      top: -150px;
-      right: -100px;
-      animation-delay: 0s;
+    
+    .accordion-collapse {
+      position: relative;
+      top: 0 !important;
+      bottom: auto !important;
     }
-
-    .bg-circle:nth-child(2) {
-      width: 250px;
-      height: 250px;
-      background: var(--primary-blue);
-      bottom: -120px;
-      left: -80px;
-      animation-delay: 5s;
+    
+    /* CSS tambahan untuk memastikan dropdown select membuka ke bawah */
+    .form-control:focus {
+      z-index: 1;
     }
-
-    .bg-circle:nth-child(3) {
-      width: 200px;
-      height: 200px;
-      background: var(--primary-blue);
-      top: 40%;
-      left: 5%;
-      animation-delay: 10s;
+    
+    /* Container untuk select dropdown */
+    .form-group {
+      position: relative;
+      z-index: 1;
     }
-
-    @keyframes float {
-      0%, 100% {
-        transform: translateY(0) rotate(0deg);
-      }
-      50% {
-        transform: translateY(-20px) rotate(5deg);
+    
+    /* CSS untuk browser tertentu yang mungkin memiliki masalah dropdown */
+    @supports (-webkit-appearance: none) {
+      select.form-control {
+        /* Khusus untuk browser WebKit (Chrome, Safari) */
+        position: relative;
+        z-index: 1;
       }
     }
-
-    nav {
-      background-color: var(--white);
-      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
-      position: sticky;
-      top: 0;
+    
+    @supports (-moz-appearance: none) {
+      select.form-control {
+        /* Khusus untuk Firefox */
+        position: relative;
+        z-index: 1;
+      }
+    }
+    
+    /* CSS untuk memastikan dropdown select membuka ke bawah */
+    .force-dropdown-down {
+      position: relative !important;
+      z-index: 1000 !important;
+    }
+    
+    /* Container untuk dropdown yang dipaksa membuka ke bawah */
+    .select-container {
+      position: relative;
       z-index: 1000;
     }
     
-    .nav-container {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 14px 20px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    
-    .brand img {
-      height: 44px;
-    }
-    
-    .brand span {
-      font-weight: 600;
-      font-size: 16px;
-      color: var(--text-primary);
-    }
-    
-    .nav-links {
-      display: flex;
-      align-items: center;
-      gap: 26px;
-    }
-    
-    .nav-links a {
-      text-decoration: none;
-      color: var(--text-secondary);
-      font-weight: 500;
-      font-size: 15px;
-      transition: color 0.25s ease;
-    }
-    
-    .nav-links a:hover, .nav-links a.active {
-      color: var(--primary-blue);
-    }
-    
-    .user-info {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      position: relative;
-    }
-    
-    .user-info span {
-      font-weight: 500;
-      font-size: 15px;
-      color: var(--text-primary);
-    }
-    
-    .user-info img, .user-info .user-initials {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      border: 2px solid #eee;
-      cursor: pointer;
-      transition: transform 0.2s ease;
-      object-fit: cover;
-    }
-    
-    .user-info img:hover, .user-info .user-initials:hover {
-      transform: scale(1.05);
-    }
-
-    .mobile-menu-btn {
-      display: none;
-      background: none;
-      border: none;
-      font-size: 24px;
-      color: var(--text-primary);
-      cursor: pointer;
-    }
-
-    .user-dropdown {
-      position: absolute;
-      top: 100%;
-      right: 0;
-      margin-top: 10px;
-      background-color: var(--white);
-      border-radius: 8px;
-      box-shadow: var(--shadow-md);
-      min-width: 200px;
-      z-index: 1001;
-      display: none;
-      overflow: hidden;
-    }
-    
-    .user-dropdown.active {
-      display: block;
-      animation: fadeIn 0.2s ease;
-    }
-    
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(-10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    
-    .user-dropdown-header {
-      padding: 12px 15px;
-      border-bottom: 1px solid var(--border-color);
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    
-    .user-dropdown-header img, .user-dropdown-header .user-initials {
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      object-fit: cover;
-    }
-    
-    .user-dropdown-header div {
-      display: flex;
-      flex-direction: column;
-    }
-    
-    .user-dropdown-header .name {
-      font-weight: 600;
-      font-size: 14px;
-    }
-    
-    .user-dropdown-header .role {
-      font-size: 12px;
-      color: var(--text-secondary);
-    }
-    
-    .user-dropdown-item {
-      padding: 10px 15px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      text-decoration: none;
-      color: var(--text-primary);
-      transition: background-color 0.2s ease;
-    }
-    
-    .user-dropdown-item:hover {
-      background-color: #f8f9fa;
-    }
-    
-    .user-dropdown-item i {
-      font-size: 16px;
-      color: var(--text-secondary);
-    }
-    
-    .user-dropdown-divider {
-      height: 1px;
-      background-color: var(--border-color);
-      margin: 5px 0;
-    }
-    
-    .user-dropdown-logout {
-      color: #dc3545;
-    }
-    
-    .user-dropdown-logout i {
-      color: #dc3545;
-    }
-
-    .header {
-      max-width: 1200px;
-      margin: 32px auto;
-      background: linear-gradient(90deg, #0040c9, #00b6ff);
-      border-radius: 14px;
-      color: var(--white);
-      padding: 32px 40px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      box-shadow: 0 3px 8px rgba(0,0,0,0.12);
-    }
-    
-    .header h3 {
-      font-weight: 600;
-      font-size: 20px;
-      margin-bottom: 10px;
-    }
-    
-    .header small {
-      font-size: 14.6px;
-      opacity: 0.95;
-    }
-    
-    .header img, .header .user-initials {
-      width: 68px;
-      height: 68px;
-      border-radius: 50%;
-      border: 2px solid var(--white);
-      object-fit: cover;
-    }
-
-    .upload-container {
-      max-width: 1200px;
-      margin: 30px auto;
-      padding: 0 20px;
-    }
-
-    .upload-form-card {
-      background-color: var(--white);
-      border-radius: 12px;
-      padding: 30px;
-      box-shadow: var(--shadow-sm);
-      margin-bottom: 30px;
-    }
-
-    .upload-form-header {
-      display: flex;
-      align-items: center;
-      gap: 15px;
-      margin-bottom: 25px;
-      padding-bottom: 15px;
-      border-bottom: 1px solid var(--border-color);
-    }
-
-    .upload-form-header i {
-      font-size: 28px;
-      color: var(--primary-blue);
-    }
-
-    .upload-form-header h4 {
-      margin: 0;
-      font-size: 20px;
-      font-weight: 600;
-      color: var(--text-primary);
-    }
-
-    .form-row {
-      display: flex;
-      gap: 20px;
-      margin-bottom: 20px;
-    }
-
+    /* CSS untuk memastikan dropdown select membuka ke bawah */
     .form-group {
-      flex: 1;
-      margin-bottom: 20px;
-    }
-
-    .form-label {
-      display: block;
-      margin-bottom: 8px;
-      font-weight: 500;
-      color: var(--text-primary);
-      font-size: 14px;
-    }
-
-    .form-label .required {
-      color: var(--danger-color);
-    }
-
-    .form-control {
-      width: 100%;
-      padding: 10px 15px;
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      font-size: 14px;
-      transition: border-color 0.3s, box-shadow 0.3s;
-    }
-
-    .form-control:focus {
-      outline: none;
-      border-color: var(--primary-blue);
-      box-shadow: 0 0 0 3px rgba(0, 88, 228, 0.15);
-    }
-
-    textarea.form-control {
-      resize: vertical;
-      min-height: 100px;
-    }
-
-    .file-upload-area {
-      border: 2px dashed var(--border-color);
-      border-radius: 8px;
-      padding: 30px;
-      text-align: center;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      background-color: #fafafa;
-    }
-
-    .file-upload-area:hover {
-      border-color: var(--primary-blue);
-      background-color: var(--primary-light);
-    }
-
-    .file-upload-area.dragover {
-      border-color: var(--primary-blue);
-      background-color: var(--primary-light);
-    }
-
-    .file-upload-icon {
-      font-size: 48px;
-      color: var(--primary-blue);
-      margin-bottom: 15px;
-    }
-
-    .file-upload-text {
-      font-size: 16px;
-      color: var(--text-primary);
-      margin-bottom: 10px;
-    }
-
-    .file-upload-subtext {
-      font-size: 14px;
-      color: var(--text-secondary);
-    }
-
-    .file-input {
-      display: none;
-    }
-
-    .file-info {
-      margin-top: 15px;
-      padding: 15px;
-      background-color: #f8f9fa;
-      border-radius: 8px;
-      display: none;
-    }
-
-    .file-info.show {
-      display: block;
-    }
-
-    .file-info-item {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 8px;
-    }
-
-    .file-info-item:last-child {
-      margin-bottom: 0;
-    }
-
-    .file-info-label {
-      font-weight: 500;
-      color: var(--text-secondary);
-    }
-
-    .file-info-value {
-      color: var(--text-primary);
-    }
-
-    .btn {
-      padding: 10px 20px;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      border: none;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .btn-primary {
-      background-color: var(--primary-blue);
-      color: var(--white);
-    }
-
-    .btn-primary:hover {
-      background-color: #0044b3;
-      transform: translateY(-2px);
-    }
-
-    .btn-secondary {
-      background-color: #e9ecef;
-      color: var(--text-primary);
-    }
-
-    .btn-secondary:hover {
-      background-color: #dee2e6;
-    }
-
-    .btn-danger {
-      background-color: var(--danger-color);
-      color: var(--white);
-    }
-
-    .btn-danger:hover {
-      background-color: #c82333;
-    }
-
-    .btn-success {
-      background-color: var(--success-color);
-      color: var(--white);
-    }
-
-    .btn-success:hover {
-      background-color: #218838;
-    }
-
-    .btn-sm {
-      padding: 6px 12px;
-      font-size: 12px;
-    }
-
-    .alert {
-      padding: 15px 20px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .alert-success {
-      background-color: #d4edda;
-      color: #155724;
-      border: 1px solid #c3e6cb;
-    }
-
-    .alert-danger {
-      background-color: #f8d7da;
-      color: #721c24;
-      border: 1px solid #f5c6cb;
-    }
-
-    .alert i {
-      font-size: 20px;
-    }
-
-    .section-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 20px;
-    }
-
-    .section-title {
-      font-size: 20px;
-      font-weight: 600;
-      color: var(--text-primary);
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .section-title i {
-      color: var(--primary-blue);
-    }
-
-    .document-count {
-      background-color: var(--primary-light);
-      color: var(--primary-blue);
-      padding: 5px 12px;
-      border-radius: 20px;
-      font-size: 14px;
-      font-weight: 500;
-    }
-
-    .document-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-      gap: 20px;
-    }
-
-    .document-card {
-      background-color: var(--white);
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: var(--shadow-sm);
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .document-card:hover {
-      transform: translateY(-5px);
-      box-shadow: var(--shadow-md);
-    }
-
-    .document-card-header {
-      padding: 15px 20px;
-      background-color: #f8f9fa;
-      border-bottom: 1px solid var(--border-color);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .document-status {
-      font-size: 12px;
-      padding: 4px 10px;
-      border-radius: 20px;
-      font-weight: 500;
-    }
-
-    .document-status-draft {
-      background-color: #fff3cd;
-      color: #856404;
-    }
-
-    .document-status-review {
-      background-color: #cce5ff;
-      color: #004085;
-    }
-
-    .document-status-published {
-      background-color: #d1f7c4;
-      color: #2e7d32;
-    }
-
-    .document-date {
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-
-    .document-card-body {
-      padding: 20px;
-      flex-grow: 1;
-    }
-
-    .document-title {
-      font-size: 16px;
-      font-weight: 600;
-      color: var(--text-primary);
-      margin-bottom: 10px;
-      line-height: 1.4;
-    }
-
-    .document-abstract {
-      font-size: 14px;
-      color: var(--text-secondary);
-      line-height: 1.5;
-      margin-bottom: 15px;
-      display: -webkit-box;
-      -webkit-line-clamp: 3;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-    }
-
-    .document-meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-bottom: 15px;
-    }
-
-    .document-meta-item {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      font-size: 12px;
-      color: var(--text-secondary);
-    }
-
-    .document-meta-item i {
-      color: var(--primary-blue);
-    }
-
-    .document-keywords {
-      margin-top: 10px;
-    }
-
-    .document-keywords-title {
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--text-primary);
-      margin-bottom: 5px;
-    }
-
-    .keyword-tags {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 5px;
-    }
-
-    .keyword-tag {
-      background-color: var(--primary-light);
-      color: var(--primary-blue);
-      font-size: 11px;
-      padding: 3px 8px;
-      border-radius: 4px;
-    }
-
-    .document-card-footer {
-      padding: 15px 20px;
-      background-color: #f8f9fa;
-      border-top: 1px solid var(--border-color);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .document-stats {
-      display: flex;
-      align-items: center;
-      gap: 15px;
-    }
-
-    .document-stat {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      font-size: 12px;
-      color: var(--text-secondary);
-    }
-
-    .document-stat i {
-      color: var(--primary-blue);
-    }
-
-    .document-actions {
-      display: flex;
-      gap: 8px;
-    }
-
-    .empty-state {
-      text-align: center;
-      padding: 60px 20px;
-      background-color: var(--white);
-      border-radius: 12px;
-      box-shadow: var(--shadow-sm);
-    }
-
-    .empty-state-icon {
-      font-size: 64px;
-      color: var(--primary-light);
-      margin-bottom: 20px;
-    }
-
-    .empty-state-title {
-      font-size: 20px;
-      font-weight: 600;
-      color: var(--text-primary);
-      margin-bottom: 10px;
-    }
-
-    .empty-state-description {
-      font-size: 16px;
-      color: var(--text-secondary);
-      margin-bottom: 20px;
-    }
-
-    footer {
-      text-align: center;
-      color: #777;
-      font-size: 0.93rem;
-      margin-top: 55px;
-      padding: 25px 0;
-      border-top: 1px solid #ddd;
-    }
-
-    @media (max-width: 768px) {
-      .mobile-menu-btn {
-        display: block;
-      }
-      
-      .nav-links {
-        display: none;
-        position: absolute;
-        top: 100%;
-        left: 0;
-        width: 100%;
-        background-color: var(--white);
-        flex-direction: column;
-        padding: 15px 0;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-      }
-      
-      .nav-links.active {
-        display: flex;
-      }
-      
-      .nav-links a {
-        padding: 10px 20px;
-        width: 100%;
-      }
-      
-      .user-info span {
-        display: none;
-      }
-      
-      .header {
-        flex-direction: column;
-        text-align: center;
-        padding: 25px 20px;
-      }
-      
-      .header div {
-        margin-bottom: 15px;
-      }
-      
-      .upload-form-card {
-        padding: 20px;
-      }
-      
-      .form-row {
-        flex-direction: column;
-        gap: 0;
-      }
-      
-      .document-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    @media (max-width: 576px) {
-      .nav-container {
-        padding: 10px 15px;
-      }
-      
-      .brand img {
-        height: 36px;
-      }
-      
-      .brand span {
-        font-size: 14px;
-      }
-      
-      .header {
-        margin: 20px 15px;
-        padding: 20px 15px;
-      }
-      
-      .header h3 {
-        font-size: 18px;
-      }
-      
-      .header small {
-        font-size: 13px;
-      }
-      
-      .header img, .header .user-initials {
-        width: 50px;
-        height: 50px;
-      }
-      
-      .upload-container {
-        padding: 0 15px;
-      }
-      
-      .upload-form-card {
-        padding: 15px;
-      }
-      
-      .document-card {
-        margin-bottom: 15px;
-      }
-      
-      .document-card-header {
-        padding: 12px 15px;
-      }
-      
-      .document-card-body {
-        padding: 15px;
-      }
-      
-      .document-card-footer {
-        padding: 12px 15px;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 10px;
-      }
-      
-      .document-actions {
-        width: 100%;
-        justify-content: space-between;
-      }
-      
-      footer {
-        margin-top: 40px;
-        padding: 20px 15px;
-        font-size: 0.85rem;
-      }
+      position: relative;
+      z-index: 1;
+    }
+    
+    /* CSS untuk memastikan dropdown select membuka ke bawah */
+    .form-group select {
+      position: relative;
+      z-index: 1;
+    }
+    
+    /* CSS untuk memastikan dropdown select membuka ke bawah */
+    .form-group select:focus {
+      z-index: 1000;
     }
   </style>
 </head>
@@ -1220,95 +426,16 @@ try {
     <div class="bg-circle"></div>
   </div>
 
-  <nav>
-    <div class="nav-container">
-      <div class="brand">
-        <img src="assets/logo_polije.png" alt="Logo">
-        <span>SIPORA</span>
-      </div>
-      <button class="mobile-menu-btn" id="mobileMenuBtn">
-        <i class="bi bi-list"></i>
-      </button>
-      <div class="nav-links" id="navLinks">
-        <a href="dashboard.php">Beranda</a>
-        <a href="upload.php" class="active">Upload</a>
-        <a href="browser.php">Browser</a>
-        <a href="search.php">Search</a>
-        <a href="download.php">Download</a>
-      </div>
-      <div class="user-info">
-        <span><?php echo htmlspecialchars($user_data['username']); ?></span>
-        
-        <div id="userAvatarContainer">
-          <?php 
-          if (hasProfilePhoto($user_id)) {
-              echo '<img src="' . getProfilePhotoUrl($user_id, $user_data['email'], $user_data['username']) . '" alt="User Avatar" id="userAvatar">';
-          } else {
-              echo getInitialsHtml($user_data['username'], 'small');
-          }
-          ?>
-        </div>
-        
-        <div class="user-dropdown" id="userDropdown">
-          <div class="user-dropdown-header">
-            <div id="dropdownAvatarContainer">
-              <?php 
-              if (hasProfilePhoto($user_id)) {
-                  echo '<img src="' . getProfilePhotoUrl($user_id, $user_data['email'], $user_data['username']) . '" alt="User Avatar">';
-              } else {
-                  echo getInitialsHtml($user_data['username'], 'small');
-              }
-              ?>
-            </div>
-            <div>
-              <div class="name"><?php echo htmlspecialchars($user_data['username']); ?></div>
-              <div class="role"><?php echo getRoleName($user_data['role']); ?></div>
-            </div>
-          </div>
-          <a href="#" class="user-dropdown-item" onclick="openProfileModal()">
-            <i class="bi bi-person"></i>
-            <span>Profil Saya</span>
-          </a>
-          <a href="#" class="user-dropdown-item" onclick="openSettingsModal()">
-            <i class="bi bi-gear"></i>
-            <span>Pengaturan</span>
-          </a>
-          <a href="#" class="user-dropdown-item" onclick="openHelpModal()">
-            <i class="bi bi-question-circle"></i>
-            <span>Bantuan</span>
-          </a>
-          <div class="user-dropdown-divider"></div>
-          <a href="?logout=true" class="user-dropdown-item user-dropdown-logout">
-            <i class="bi bi-box-arrow-right"></i>
-            <span>Keluar</span>
-          </a>
-        </div>
-      </div>
-    </div>
-  </nav>
-
-  <div class="header">
-    <div>
-      <h3>Unggah Dokumen</h3>
-      <small>Bagikan karya ilmiah Anda ke repository POLITEKNIK NEGERI JEMBER</small>
-    </div>
-    <div id="headerAvatarContainer">
-      <?php 
-      if (hasProfilePhoto($user_id)) {
-          echo '<img src="' . getProfilePhotoUrl($user_id, $user_data['email'], $user_data['username']) . '" alt="User Avatar">';
-      } else {
-          echo getInitialsHtml($user_data['username'], 'normal');
-      }
-      ?>
-    </div>
-  </div>
+  <?php include 'components/navbar.php'; ?>
+  <?php include 'components/header_upload.php'; ?>
+  <?php include 'components/top_menu.php'; ?>
 
   <div class="upload-container">
     <?php if ($upload_success): ?>
       <div class="alert alert-success">
         <i class="bi bi-check-circle-fill"></i>
         <div>
-          <strong>Upload Berhasil!</strong> Dokumen Anda telah berhasil diunggah dan sedang dalam proses review.
+          <strong>Upload Berhasil!</strong> Dokumen Anda telah berhasil diunggah dan akan segera direview.
         </div>
       </div>
     <?php endif; ?>
@@ -1339,26 +466,27 @@ try {
                    value="<?php echo isset($_POST['judul']) ? htmlspecialchars($_POST['judul']) : ''; ?>">
           </div>
           <div class="form-group">
-            <label class="form-label">
-              Tahun <span class="required">*</span>
-            </label>
-            <select class="form-control" name="year_id" required>
-              <?php foreach ($tahun_data as $tahun): ?>
-                <option value="<?php echo $tahun['year_id']; ?>" 
-                        <?php echo (isset($_POST['year_id']) && $_POST['year_id'] == $tahun['year_id']) ? 'selected' : ''; ?>>
-                  <?php echo $tahun['year_id']; ?>
-                </option>
-              <?php endforeach; ?>
-            </select>
-          </div>
+  <label class="form-label" for="year_id">
+    Tahun <span class="required">*</span>
+  </label>
+  <select class="form-control" id="year_id" name="year_id" required>
+    <option value="">-- Pilih Tahun --</option>
+    <?php foreach ($tahun_data as $tahun): ?>
+      <option value="<?php echo $tahun['year_id']; ?>" 
+              <?php echo (isset($_POST['year_id']) && $_POST['year_id'] == $tahun['year_id']) ? 'selected' : ''; ?>>
+        <?php echo htmlspecialchars($tahun['tahun']); ?>
+      </option>
+    <?php endforeach; ?>
+  </select>
+</div>
         </div>
 
         <div class="form-group">
           <label class="form-label">
-            Abstrak <span class="required">*</span>
+            Deskripsi Singkat <span class="required">*</span>
           </label>
           <textarea class="form-control" name="abstrak" required 
-                    placeholder="Jelaskan ringkasan isi dokumen Anda"><?php echo isset($_POST['abstrak']) ? htmlspecialchars($_POST['abstrak']) : ''; ?></textarea>
+                    placeholder="Masukan Deskripsi isi dokumen Anda"><?php echo isset($_POST['abstrak']) ? htmlspecialchars($_POST['abstrak']) : ''; ?></textarea>
         </div>
 
         <div class="form-group">
@@ -1366,12 +494,26 @@ try {
             Kata Kunci <span class="required">*</span>
           </label>
           <input type="text" class="form-control" name="kata_kunci" required 
-                   placeholder="Pisahkan dengan koma (contoh: machine learning, data mining, AI)" 
-                   value="<?php echo isset($_POST['kata_kunci']) ? htmlspecialchars($_POST['kata_kunci']) : ''; ?>">
+                 placeholder="Pisahkan dengan koma (contoh: machine learning, data mining, AI)" 
+                 value="<?php echo isset($_POST['kata_kunci']) ? htmlspecialchars($_POST['kata_kunci']) : ''; ?>">
           <small class="text-muted">Masukkan 3-5 kata kunci yang relevan dengan dokumen</small>
         </div>
 
         <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">
+              Divisi <span class="required">*</span>
+            </label>
+            <select class="form-control" name="id_divisi" id="id_divisi" required>
+              <option value="">Pilih Divisi</option>
+              <?php foreach ($divisi_data as $divisi): ?>
+                <option value="<?php echo $divisi['id_divisi']; ?>" 
+                        <?php echo (isset($_POST['id_divisi']) && $_POST['id_divisi'] == $divisi['id_divisi']) ? 'selected' : ''; ?>>
+                  <?php echo htmlspecialchars($divisi['nama_divisi']); ?>
+                </option>
+              <?php endforeach; ?>
+            </select>
+          </div>
           <div class="form-group">
             <label class="form-label">
               Jurusan <span class="required">*</span>
@@ -1386,6 +528,9 @@ try {
               <?php endforeach; ?>
             </select>
           </div>
+        </div>
+
+        <div class="form-row">
           <div class="form-group">
             <label class="form-label">
               Program Studi <span class="required">*</span>
@@ -1400,21 +545,20 @@ try {
               <?php endforeach; ?>
             </select>
           </div>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">
-            Tema <span class="required">*</span>
-          </label>
-          <select class="form-control" name="id_tema" required>
-            <option value="">Pilih Tema</option>
-            <?php foreach ($tema_data as $tema): ?>
-              <option value="<?php echo $tema['id_tema']; ?>" 
-                      <?php echo (isset($_POST['id_tema']) && $_POST['id_tema'] == $tema['id_tema']) ? 'selected' : ''; ?>>
-                <?php echo htmlspecialchars($tema['nama_tema']); ?>
-              </option>
-            <?php endforeach; ?>
-          </select>
+          <div class="form-group">
+            <label class="form-label">
+              Tema <span class="required">*</span>
+            </label>
+            <select class="form-control" name="id_tema" required>
+              <option value="">Pilih Tema</option>
+              <?php foreach ($tema_data as $tema): ?>
+                <option value="<?php echo $tema['id_tema']; ?>" 
+                        <?php echo (isset($_POST['id_tema']) && $_POST['id_tema'] == $tema['id_tema']) ? 'selected' : ''; ?>>
+                  <?php echo htmlspecialchars($tema['nama_tema']); ?>
+                </option>
+              <?php endforeach; ?>
+            </select>
+          </div>
         </div>
 
         <div class="form-group">
@@ -1443,6 +587,54 @@ try {
           </div>
         </div>
 
+        <!-- Turnitin Section (Percentage Input & File Upload) -->
+        <div class="optional-section">
+          <div class="optional-header">
+            <h5>Skor Turnitin</h5>
+            <span class="badge">Opsional</span>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">
+              Persentase Kemiripan
+            </label>
+            <div class="input-group">
+              <input type="number" class="form-control" name="turnitin" 
+                     placeholder="0" min="0" max="100" step="0.1"
+                     value="<?php echo isset($_POST['turnitin']) ? htmlspecialchars($_POST['turnitin']) : ''; ?>">
+              <span class="input-group-text">%</span>
+            </div>
+            <small class="text-muted">Masukkan skor persentase kemiripan dari Turnitin (0-100%). Kosongkan jika tidak ada.</small>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">
+              File Laporan Turnitin
+            </label>
+            <div class="file-upload-area" id="turnitinFileUploadArea">
+              <i class="bi bi-file-earmark-pdf file-upload-icon"></i>
+              <div class="file-upload-text">Klik untuk memilih file Turnitin atau drag & drop</div>
+              <div class="file-upload-subtext">Format yang didukung: PDF, DOC, DOCX (Maks. 5MB)</div>
+              <input type="file" class="file-input" id="turnitinFileInput" name="turnitin_file" accept=".pdf,.doc,.docx">
+            </div>
+            <div class="file-info" id="turnitinFileInfo" style="display: none;">
+              <div class="file-info-item">
+                <span class="file-info-label">Nama File:</span>
+                <span class="file-info-value" id="turnitinFileName"></span>
+              </div>
+              <div class="file-info-item">
+                <span class="file-info-label">Ukuran:</span>
+                <span class="file-info-value" id="turnitinFileSize"></span>
+              </div>
+              <div class="file-info-item">
+                <span class="file-info-label">Tipe:</span>
+                <span class="file-info-value" id="turnitinFileType"></span>
+              </div>
+            </div>
+            <small class="text-muted">Opsional: Unggah file laporan Turnitin sebagai bukti validasi.</small>
+          </div>
+        </div>
+
         <div class="d-flex gap-2">
           <button type="submit" class="btn btn-primary" name="upload_document">
             <i class="bi bi-cloud-upload"></i> Unggah Dokumen
@@ -1453,207 +645,303 @@ try {
         </div>
       </form>
     </div>
+  </div>
 
-    <?php if (empty($my_documents)): ?>
-      <div class="empty-state">
-        <div class="empty-state-icon">
-          <i class="bi bi-inbox"></i>
+  <?php include 'components/footer_upload.php'; ?>
+
+  <!-- Profile Modal -->
+  <div class="modal fade" id="profileModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Profil Pengguna</h5>
+          <button type="button" class="modal-close" onclick="closeModal('profileModal')">
+            <i class="bi bi-x-lg"></i>
+          </button>
         </div>
-        <h3 class="empty-state-title">Belum Ada Dokumen</h3>
-        <p class="empty-state-description">Anda belum mengunggah dokumen apa pun. Mulai unggah dokumen pertama Anda!</p>
-        <button class="btn btn-primary" onclick="document.getElementById('uploadForm').scrollIntoView({behavior: 'smooth'})">
-          <i class="bi bi-plus-circle"></i> Unggah Dokumen Baru
-        </button>
+        <div class="modal-body">
+          <div class="profile-header">
+            <div id="modalAvatarContainer">
+              <?php 
+              if (hasProfilePhoto($user_id)) {
+                  echo '<img src="' . getProfilePhotoUrl($user_id, $user_data['email'], $user_data['username']) . '" alt="User Avatar" class="profile-avatar" id="profileAvatarImg">';
+              } else {
+                  echo getInitialsHtml($user_data['username'], 'large');
+              }
+              ?>
+            </div>
+            <div class="profile-info">
+              <h4><?php echo htmlspecialchars($user_data['username']); ?></h4>
+              <p><?php echo htmlspecialchars($user_data['email']); ?></p>
+              <p><?php echo getRoleName($user_data['role']); ?></p>
+            </div>
+          </div>
+          
+          <div class="profile-details">
+            <h5>Informasi Pribadi</h5>
+            <div class="profile-detail-item">
+              <span class="profile-detail-label">Username</span>
+              <span class="profile-detail-value"><?php echo htmlspecialchars($user_data['username']); ?></span>
+            </div>
+            <div class="profile-detail-item">
+              <span class="profile-detail-label">Email</span>
+              <span class="profile-detail-value"><?php echo htmlspecialchars($user_data['email']); ?></span>
+            </div>
+            <div class="profile-detail-item">
+              <span class="profile-detail-label">Role</span>
+              <span class="profile-detail-value"><?php echo getRoleName($user_data['role']); ?></span>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('profileModal')">Tutup</button>
+        </div>
       </div>
-    <?php else: ?>
-      <div class="document-grid">
-        <?php foreach ($my_documents as $document): ?>
-          <div class="document-card">
-            <div class="document-card-header">
-              <span class="document-status document-status-<?php 
-                echo $document['status_id'] == 1 ? 'published' : 
-                     ($document['status_id'] == 2 ? 'review' : 'draft'); 
-              ?>">
-                <?php echo getStatusName($document['status_id']); ?>
-              </span>
-              <span class="document-date">
-                <i class="bi bi-calendar"></i> <?php echo date('d M Y', strtotime($document['upload_date'])); ?>
-              </span>
-            </div>
-            <div class="document-card-body">
-              <h5 class="document-title"><?php echo htmlspecialchars($document['title']); ?></h5>
-              <p class="document-abstract"><?php echo htmlspecialchars($document['abstract']); ?></p>
-              
-              <div class="document-meta">
-                <?php if ($document['department']): ?>
-                  <div class="document-meta-item">
-                    <i class="bi bi-building"></i>
-                    <span><?php echo htmlspecialchars($document['department']); ?></span>
-                  </div>
-                <?php endif; ?>
-                <?php if ($document['prodi']): ?>
-                  <div class="document-meta-item">
-                    <i class="bi bi-book"></i>
-                    <span><?php echo htmlspecialchars($document['prodi']); ?></span>
-                  </div>
-                <?php endif; ?>
-                <?php if ($document['tema']): ?>
-                  <div class="document-meta-item">
-                    <i class="bi bi-tag"></i>
-                    <span><?php echo htmlspecialchars($document['tema']); ?></span>
-                  </div>
-                <?php endif; ?>
-              </div>
-              
-              <?php if (!empty($document['keywords'])): ?>
-                <div class="document-keywords">
-                  <div class="document-keywords-title">Kata Kunci:</div>
-                  <div class="keyword-tags">
-                    <?php 
-                    $keywords = explode(',', $document['keywords']);
-                    foreach ($keywords as $keyword): 
-                      $keyword = trim($keyword);
-                      if (!empty($keyword)):
-                    ?>
-                      <span class="keyword-tag"><?php echo htmlspecialchars($keyword); ?></span>
-                    <?php 
-                      endif;
-                    endforeach; 
-                    ?>
-                  </div>
-                </div>
-              <?php endif; ?>
-            </div>
-            <div class="document-card-footer">
-              <div class="document-stats">
-                <div class="document-stat">
-                  <i class="bi bi-download"></i>
-                  <span><?php echo number_format($document['download_count']); ?></span>
-                </div>
-                <div class="document-stat">
-                  <i class="bi bi-eye"></i>
-                  <span><?php echo rand(50, 200); ?></span>
-                </div>
-              </div>
-              <div class="document-actions">
-                <button class="btn btn-sm btn-primary" onclick="viewDocument(<?php echo $document['id_book']; ?>)">
-                  <i class="bi bi-eye"></i> Lihat
+    </div>
+  </div>
+
+  <!-- Help Modal -->
+  <div class="modal fade" id="helpModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Bantuan</h5>
+          <button type="button" class="modal-close" onclick="closeModal('helpModal')">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="accordion" id="helpAccordion">
+            <div class="accordion-item">
+              <h2 class="accordion-header" id="headingOne">
+                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="true" aria-controls="collapseOne">
+                  Cara Mengunggah Dokumen
                 </button>
-                <?php if ($document['status_id'] == 3): ?>
-                  <button class="btn btn-sm btn-danger" onclick="deleteDocument(<?php echo $document['id_book']; ?>)">
-                    <i class="bi bi-trash"></i> Hapus
-                  </button>
-                <?php endif; ?>
+              </h2>
+              <div id="collapseOne" class="accordion-collapse collapse show" aria-labelledby="headingOne" data-bs-parent="#helpAccordion">
+                <div class="accordion-body">
+                  <ol>
+                    <li>Isi form yang tersedia dengan informasi dokumen</li>
+                    <li>Pilih file dokumen yang akan diunggah</li>
+                    <li>Opsional: Masukkan skor Turnitin dan unggah file laporan Turnitin jika tersedia</li>
+                    <li>Klik tombol "Unggah Dokumen" untuk mengunggah dokumen</li>
+                    <li>Tunggu hingga proses unggah selesai</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+            <div class="accordion-item">
+              <h2 class="accordion-header" id="headingTwo">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTwo" aria-expanded="false" aria-controls="collapseTwo">
+                  Format Dokumen yang Didukung
+                </button>
+              </h2>
+              <div id="collapseTwo" class="accordion-collapse collapse" aria-labelledby="headingTwo" data-bs-parent="#helpAccordion">
+                <div class="accordion-body">
+                  <p>Sistem kami mendukung berbagai format dokumen, antara lain:</p>
+                  <ul>
+                    <li>Dokumen Utama: PDF (.pdf), Microsoft Word (.doc, .docx), Microsoft PowerPoint (.ppt, .pptx), Microsoft Excel (.xls, .xlsx)</li>
+                    <li>Laporan Turnitin: PDF (.pdf), Microsoft Word (.doc, .docx)</li>
+                  </ul>
+                </div>
               </div>
             </div>
           </div>
-        <?php endforeach; ?>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('helpModal')">Tutup</button>
+        </div>
       </div>
-    <?php endif; ?>
+    </div>
   </div>
 
-  <footer>© 2025 SIPORA - Sistem Informasi Portal Repository Akademik POLITEKNIK NEGERI JEMBER</footer>
-
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
   <script>
-    document.getElementById('mobileMenuBtn').addEventListener('click', function() {
-      document.getElementById('navLinks').classList.toggle('active');
+    // Script filter prodi berdasarkan jurusan
+    // URL sekarang menunjuk ke file yang sama dengan parameter ?get_prodi=1
+    $(document).ready(function() {
+      $('#id_jurusan').on('change', function() {
+        const idJurusan = $(this).val();
+        const $prodiSelect = $('#id_prodi');
+        $prodiSelect.html('<option value="">Memuat...</option>');
+
+        if (idJurusan) {
+          // Menggunakan URL yang sama dengan parameter tambahan
+          $.getJSON(window.location.pathname + '?get_prodi=1&id_jurusan=' + idJurusan, function(data) {
+            let options = '<option value="">-- Pilih Program Studi --</option>';
+            data.forEach(function(item) {
+              options += `<option value="${item.id_prodi}">${item.nama_prodi}</option>`;
+            });
+            $prodiSelect.html(options);
+          }).fail(function() {
+            $prodiSelect.html('<option value="">Gagal memuat program studi</option>');
+          });
+        } else {
+          $prodiSelect.html('<option value="">-- Pilih Program Studi --</option>');
+        }
+      });
     });
-
-    document.getElementById('userAvatarContainer').addEventListener('click', function(e) {
-      e.stopPropagation();
-      document.getElementById('userDropdown').classList.toggle('active');
-    });
-
-    document.addEventListener('click', function() {
-      document.getElementById('userDropdown').classList.remove('active');
-    });
-
-    document.getElementById('userDropdown').addEventListener('click', function(e) {
-      e.stopPropagation();
-    });
-
-    // File upload functionality
-    const fileUploadArea = document.getElementById('fileUploadArea');
-    const fileInput = document.getElementById('fileInput');
-    const fileInfo = document.getElementById('fileInfo');
-    const fileName = document.getElementById('fileName');
-    const fileSize = document.getElementById('fileSize');
-    const fileType = document.getElementById('fileType');
-
-    fileUploadArea.addEventListener('click', function() {
-      fileInput.click();
-    });
-
-    fileUploadArea.addEventListener('dragover', function(e) {
-      e.preventDefault();
-      this.classList.add('dragover');
-    });
-
-    fileUploadArea.addEventListener('dragleave', function() {
-      this.classList.remove('dragover');
-    });
-
-    fileUploadArea.addEventListener('drop', function(e) {
-      e.preventDefault();
-      this.classList.remove('dragover');
+    
+    // JavaScript untuk menangani upload file Turnitin
+    document.addEventListener('DOMContentLoaded', function() {
+      const turnitinFileInput = document.getElementById('turnitinFileInput');
+      const turnitinFileUploadArea = document.getElementById('turnitinFileUploadArea');
+      const turnitinFileInfo = document.getElementById('turnitinFileInfo');
+      const turnitinFileName = document.getElementById('turnitinFileName');
+      const turnitinFileSize = document.getElementById('turnitinFileSize');
+      const turnitinFileType = document.getElementById('turnitinFileType');
       
-      const files = e.dataTransfer.files;
-      if (files.length > 0) {
-        fileInput.files = files;
-        displayFileInfo(files[0]);
+      // Klik area untuk memilih file
+      turnitinFileUploadArea.addEventListener('click', function() {
+        turnitinFileInput.click();
+      });
+      
+      // Menangani perubahan file
+      turnitinFileInput.addEventListener('change', function() {
+        if (this.files && this.files[0]) {
+          const file = this.files[0];
+          
+          // Tampilkan informasi file
+          turnitinFileName.textContent = file.name;
+          turnitinFileSize.textContent = formatFileSize(file.size);
+          turnitinFileType.textContent = file.type || 'Unknown';
+          
+          // Tampilkan area informasi file
+          turnitinFileInfo.style.display = 'block';
+          
+          // Update tampilan area upload
+          turnitinFileUploadArea.classList.add('has-file');
+        }
+      });
+      
+      // Drag and drop untuk file Turnitin
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        turnitinFileUploadArea.addEventListener(eventName, preventDefaults, false);
+      });
+      
+      function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
       }
+      
+      ['dragenter', 'dragover'].forEach(eventName => {
+        turnitinFileUploadArea.addEventListener(eventName, highlight, false);
+      });
+      
+      ['dragleave', 'drop'].forEach(eventName => {
+        turnitinFileUploadArea.addEventListener(eventName, unhighlight, false);
+      });
+      
+      function highlight() {
+        turnitinFileUploadArea.classList.add('highlight');
+      }
+      
+      function unhighlight() {
+        turnitinFileUploadArea.classList.remove('highlight');
+      }
+      
+      turnitinFileUploadArea.addEventListener('drop', handleDrop, false);
+      
+      function handleDrop(e) {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        
+        if (files.length > 0) {
+          turnitinFileInput.files = files;
+          
+          // Trigger change event
+          const event = new Event('change', {
+            bubbles: true,
+            cancelable: true,
+          });
+          turnitinFileInput.dispatchEvent(event);
+        }
+      }
+      
+      // Fungsi helper untuk format ukuran file
+      function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+      }
+      
+      // Reset form
+      window.resetForm = function() {
+        document.getElementById('uploadForm').reset();
+        
+        // Reset file info untuk dokumen utama
+        document.getElementById('fileInfo').style.display = 'none';
+        document.getElementById('fileUploadArea').classList.remove('has-file');
+        
+        // Reset file info untuk Turnitin
+        turnitinFileInfo.style.display = 'none';
+        turnitinFileUploadArea.classList.remove('has-file');
+      };
     });
-
-    fileInput.addEventListener('change', function() {
-      if (this.files.length > 0) {
-        displayFileInfo(this.files[0]);
-      }
+    
+    // JavaScript untuk memastikan dropdown hanya membuka ke bawah
+    document.addEventListener('DOMContentLoaded', function() {
+      // Untuk semua elemen select
+      const selectElements = document.querySelectorAll('select.form-control');
+      
+      selectElements.forEach(function(select) {
+        // Event listener saat dropdown dibuka
+        select.addEventListener('mousedown', function(e) {
+          // Mendapatkan posisi elemen relatif terhadap viewport
+          const rect = select.getBoundingClientRect();
+          const viewportHeight = window.innerHeight;
+          const dropdownHeight = 200; // Perkiraan tinggi dropdown
+          
+          // Jika dropdown akan keluar dari viewport bawah, tetap paksa membuka ke bawah
+          if (rect.bottom + dropdownHeight > viewportHeight) {
+            // Tambahkan class untuk memastikan dropdown membuka ke bawah
+            select.classList.add('force-dropdown-down');
+            
+            // Tambahkan style inline untuk memastikan dropdown membuka ke bawah
+            select.style.position = 'relative';
+            select.style.zIndex = '1000';
+            
+            // Buat container untuk dropdown jika belum ada
+            if (!select.parentNode.classList.contains('select-container')) {
+              const container = document.createElement('div');
+              container.className = 'select-container';
+              container.style.position = 'relative';
+              container.style.zIndex = '1000';
+              
+              // Pindahkan select ke dalam container
+              select.parentNode.insertBefore(container, select);
+              container.appendChild(select);
+            }
+          }
+        });
+        
+        // Event listener saat dropdown ditutup
+        select.addEventListener('blur', function() {
+          // Hapus class saat dropdown ditutup
+          select.classList.remove('force-dropdown-down');
+        });
+      });
+      
+      // Untuk accordion di modal bantuan
+      const accordionButtons = document.querySelectorAll('.accordion-button');
+      
+      accordionButtons.forEach(function(button) {
+        button.addEventListener('click', function() {
+          // Pastikan accordion hanya membuka ke bawah
+          const accordionCollapse = document.getElementById(this.getAttribute('data-bs-target').substring(1));
+          if (accordionCollapse) {
+            accordionCollapse.style.position = 'relative';
+            accordionCollapse.style.top = '0';
+            accordionCollapse.style.bottom = 'auto';
+          }
+        });
+      });
     });
-
-    function displayFileInfo(file) {
-      fileName.textContent = file.name;
-      fileSize.textContent = formatFileSize(file.size);
-      fileType.textContent = file.type || 'Unknown';
-      fileInfo.classList.add('show');
-    }
-
-    function formatFileSize(bytes) {
-      if (bytes === 0) return '0 Bytes';
-      const k = 1024;
-      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-      const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    }
-
-    function resetForm() {
-      document.getElementById('uploadForm').reset();
-      fileInfo.classList.remove('show');
-    }
-
-    function viewDocument(docId) {
-      window.location.href = 'view_document.php?id=' + docId;
-    }
-
-    function deleteDocument(docId) {
-      if (confirm('Apakah Anda yakin ingin menghapus dokumen ini? Tindakan ini tidak dapat dibatalkan.')) {
-        // Implement delete functionality
-        window.location.href = 'delete_document.php?id=' + docId;
-      }
-    }
-
-    function openProfileModal() {
-      window.location.href = 'dashboard.php#profile';
-    }
-
-    function openSettingsModal() {
-      window.location.href = 'dashboard.php#settings';
-    }
-
-    function openHelpModal() {
-      window.location.href = 'dashboard.php#help';
-    }
   </script>
+  <script src="assets/js/upload.js"></script>
 </body>
 </html>

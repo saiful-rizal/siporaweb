@@ -12761,39 +12761,147 @@ textarea.is-invalid.tt-hint, .select2-container--default .select2-selection--sin
 [data-bs-theme=dark] .navbar-toggler-icon {
   --bs-navbar-toggler-icon-bg: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255, 255, 255, 0.55%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
 }
+.sidebar {
+  background: linear-gradient(to top, #4e73df 0%, #ffffff 100%) !important;
+}
+#tables {
+    background: transparent !important;
+    padding: 8px 0;
+}
 
+/* Target sub-menu ul langsung */
+#tables .nav.flex-column.sub-menu {
+    background: transparent !important;
+    padding: 0;
+}
+
+/* Item dropdown dengan background putih penuh */
+#tables .sub-menu .nav-item {
+    background: #ffffff !important;
+    margin: 5px 12px !important;
+    border-radius: 6px !important;
+}
+
+/* Link di dalam dropdown */
+#tables .sub-menu .nav-item .nav-link {
+    color: #333333 !important;
+    background: #ffffff !important;
+    padding: 12px 16px !important;
+    border-radius: 6px !important;
+}
+
+/* Hover */
+#tables .sub-menu .nav-item .nav-link:hover {
+    background: #e8e8e8 !important;
+    color: #000 !important;
+}
+
+/* Hilangkan background ungu dari sidebar */
+.sidebar .nav .nav-item .collapse {
+    background: transparent 
+}
+
+/* Jika masih ada background ungu, paksa semua parent */
+.sidebar .nav-item,
+.sidebar .collapse,
+.sidebar #tables {
+    background: transparent !important;
+}
+/* Paksa hapus semua background ungu */
+.sidebar,
+.sidebar .nav-item,
+.sidebar #tables,
+.sidebar .collapse {
+    background: transparent !important;
+}
+
+/* Hanya item menu yang putih */
+#tables .nav-item {
+    background: #ffffff !important;
+    margin: 6px 15px !important;
+    border-radius: 8px !important;
+    overflow: hidden;
+}
+
+#tables .nav-item .nav-link {
+    background: #ffffff !important;
+    color: #333 !important;
+    padding: 12px 20px !important;
+}
+
+#tables .nav-item .nav-link:hover {
+    background: #f5f5f5 !important;
+}
+/* Gradient Sidebar - Biru ke Putih */
+.sidebar.sidebar-offcanvas {
+  background: linear-gradient(to bottom, 
+    #81a4eb 0%, 
+    #a8c5f7 12%, 
+    #ffffff 22%,
+    #ffffff 100%
+  ) !important;
+}
+
+/* Dropdown putih */
+#tables .nav-item {
+    background: #ffffff !important;
+    margin: 6px 15px !important;
+    border-radius: 8px !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+#tables .nav-item .nav-link {
+    color: #333 !important;
+    padding: 12px 16px !important;
+}
+
+#tables .nav-item .nav-link:hover {
+    background: #f0f0f0 !important;
+    border-radius: 8px;
+}
 .card {
-  --bs-card-spacer-y: 1rem;
-  --bs-card-spacer-x: 1rem;
-  --bs-card-title-spacer-y: 0.5rem;
-  --bs-card-title-color: #010101;
-  --bs-card-subtitle-color: ;
-  --bs-card-border-width: var(--bs-border-width);
-  --bs-card-border-color: #e3e3e3;
-  --bs-card-border-radius: 20px;
-  --bs-card-box-shadow: none;
-  --bs-card-inner-border-radius: calc(var(--bs-border-radius) - (var(--bs-border-width)));
-  --bs-card-cap-padding-y: 0.5rem;
-  --bs-card-cap-padding-x: 1rem;
-  --bs-card-cap-bg: rgba(var(--bs-body-color-rgb), 0.03);
-  --bs-card-cap-color: ;
-  --bs-card-height: ;
-  --bs-card-color: ;
-  --bs-card-bg: var(--bs-body-bg);
+  --bs-card-spacer-y: 1.25rem;
+  --bs-card-spacer-x: 1.25rem;
+
+  --bs-card-title-spacer-y: 0.6rem;
+  --bs-card-title-color: #0e2c43; /* biru gelap elegan */
+  --bs-card-subtitle-color: #3b6075;
+
+  --bs-card-border-width: 1px;
+  --bs-card-border-color: #bcd9e6; /* pastel border */
+  --bs-card-border-radius: 18px;
+
+  --bs-card-box-shadow: 0 4px 12px rgba(0,0,0,0.07);
+
+  --bs-card-inner-border-radius: calc(var(--bs-card-border-radius) - 2px);
+
+  --bs-card-cap-padding-y: 0.7rem;
+  --bs-card-cap-padding-x: 1.25rem;
+
+  --bs-card-cap-bg: #d3e8f5; /* soft blue header */
+  --bs-card-cap-color: #0e2c43;
+
+  --bs-card-height: auto;
+  --bs-card-color: #0e2c43;
+
+  --bs-card-bg: #d9eef7; /* soft blue background */
+
   --bs-card-img-overlay-padding: 1rem;
   --bs-card-group-margin: 0.75rem;
+
   position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
   height: var(--bs-card-height);
-  color: var(--bs-body-color);
+  color: var(--bs-card-color);
   word-wrap: break-word;
   background-color: var(--bs-card-bg);
   background-clip: border-box;
   border: var(--bs-card-border-width) solid var(--bs-card-border-color);
   border-radius: var(--bs-card-border-radius);
 }
+
 .card > hr {
   margin-right: 0;
   margin-left: 0;
@@ -24019,7 +24127,12 @@ table.dataTable tbody td.select-checkbox:after {
 /* Sidebar */
 .sidebar {
   min-height: calc(100vh - 60px);
-  background: #fff;
+  background: linear-gradient(to bottom,
+      rgba(59,130,246,0.35) 0%,   /* biru tipis */
+      rgba(59,130,246,0.10) 10%, 
+      #ffffff 30%,                /* cepat jadi putih */
+      #ffffff 100%
+  );
   font-family: "Nunito", sans-serif;
   font-weight: 500;
   padding: 0;
@@ -24030,6 +24143,11 @@ table.dataTable tbody td.select-checkbox:after {
   -moz-transition: width 0.25s ease, background 0.25s ease;
   -ms-transition: width 0.25s ease, background 0.25s ease;
 }
+
+
+
+
+
 .sidebar .nav {
   overflow: hidden;
   flex-wrap: nowrap;
@@ -24160,8 +24278,11 @@ table.dataTable tbody td.select-checkbox:after {
   margin: 0;
 }
 .sidebar .nav:not(.sub-menu) > .nav-item > .nav-link[aria-expanded=true] {
-  border-radius: 8px 8px 0 0;
-  background: #4B49AC;
+  background: linear-gradient(to right,
+      #3B82F6 0%,
+      #2563EB 70%,
+      #1E40AF 100%
+  );
   color: #fff;
 }
 .sidebar .nav:not(.sub-menu) > .nav-item.active {
@@ -24199,12 +24320,19 @@ table.dataTable tbody td.select-checkbox:after {
   font-weight: 400;
 }
 .sidebar .nav.sub-menu .nav-item .nav-link:hover {
+  background: linear-gradient(to right,
+      #60A5FA 0%,
+      #3B82F6 100%
+  );
   color: #ffffff;
 }
 .sidebar .nav.sub-menu .nav-item .nav-link.active {
+  background: linear-gradient(to right,
+      #3B82F6 0%,
+      #1E40AF 100%
+  );
   color: #ffffff;
-  font-weight: 900;
-  background: transparent;
+  font-weight: 700;
 }
 .sidebar .nav.sub-menu .nav-item:hover {
   background: transparent;
@@ -24228,15 +24356,24 @@ table.dataTable tbody td.select-checkbox:after {
 .sidebar-dark .sidebar .nav .nav-item .nav-link[aria-expanded=true] .menu-title {
   color: #FFFFFF;
 }
-.sidebar-dark .sidebar .nav .nav-item.active > .nav-link {
-  background: #4B49AC;
+.sidebar .nav .nav-item.active > .nav-link {
+  background: linear-gradient(to right,
+      #3B82F6 0%,    /* biru terang */
+      #2563EB 70%,   /* biru sedang */
+      #1E40AF 100%   /* biru gelap tipis */
+  );
+  color: #fff;
 }
 .sidebar-dark .sidebar .nav .nav-item.active > .nav-link .menu-title,
 .sidebar-dark .sidebar .nav .nav-item.active > .nav-link i {
   color: #ffffff;
 }
-.sidebar-dark .sidebar .nav:not(.sub-menu) > .nav-item:hover > .nav-link {
-  background: #4B49AC;
+.sidebar .nav:not(.sub-menu) > .nav-item:hover > .nav-link {
+  background: linear-gradient(to right,
+      #60A5FA 0%,    /* biru sangat lembut */
+      #3B82F6 80%,   /* biru cerah */
+      #2563EB 100%   /* biru medium */
+  );
   color: #fff;
 }
 .sidebar-dark .sidebar .nav:not(.sub-menu) > .nav-item .nav-link[aria-expanded=true] {
@@ -24297,38 +24434,49 @@ table.dataTable tbody td.select-checkbox:after {
 .navbar .navbar-brand-wrapper {
   background: #ffffff;
   transition: width 0.25s ease, background 0.25s ease;
-  -webkit-transition: width 0.25s ease, background 0.25s ease;
-  -moz-transition: width 0.25s ease, background 0.25s ease;
-  -ms-transition: width 0.25s ease, background 0.25s ease;
   width: 235px;
   height: 60px;
   padding-left: 1rem;
 }
+
 .sidebar-dark .navbar .navbar-brand-wrapper {
   background: #232227;
 }
+
 .navbar .navbar-brand-wrapper .navbar-brand {
   color: #27367f;
   font-size: 1.5rem;
   margin-right: 0;
   padding: 0.25rem 0;
 }
+
 .navbar .navbar-brand-wrapper .navbar-brand.brand-logo-mini {
   display: none;
 }
-.navbar .navbar-brand-wrapper .navbar-brand:active, .navbar .navbar-brand-wrapper .navbar-brand:focus, .navbar .navbar-brand-wrapper .navbar-brand:hover {
+
+.navbar .navbar-brand-wrapper .navbar-brand:active,
+.navbar .navbar-brand-wrapper .navbar-brand:focus,
+.navbar .navbar-brand-wrapper .navbar-brand:hover {
   color: #1b2658;
 }
+
 .navbar .navbar-brand-wrapper .navbar-brand img {
   max-width: 100%;
   height: 34px;
   margin: auto;
   vertical-align: middle;
 }
+
+/* ⭐ Tambahkan geser logo ke kanan */
+.navbar .navbar-brand-wrapper img {
+  margin-left: 5px; 
+}
+
 .navbar .navbar-brand-wrapper .brand-logo-mini {
   padding-left: 0;
   text-align: center;
 }
+
 .navbar .navbar-brand-wrapper .brand-logo-mini img {
   width: calc(70px - 30px);
   max-width: 100%;

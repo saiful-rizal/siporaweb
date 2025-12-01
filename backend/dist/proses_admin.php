@@ -1,9 +1,22 @@
 <?php
+session_start();
 require_once __DIR__ . '/../config/db.php';
+
+// ====== CEK ROLE ADMIN & BATASAN ID ======
+if (!isset($_SESSION['username']) || $_SESSION['role'] !== 'admin') {
+    header("Location: ../../frontend/auth.php");
+    exit;
+}
+
+// Hanya admin dengan id = 5 yang boleh menambah admin
+if ($_SESSION['user_id'] != 5) {
+    header("Location: form_admin.php?error=not_allowed");
+    exit;
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $nama_lengkap = trim($_POST['nama_lengkap']);
-    $nomor_induk = trim($_POST['nomor_induk']);
+    $nim = trim($_POST['nim']);
     $email = trim($_POST['email']);
     $username = trim($_POST['username']);
     $password_hash = password_hash($_POST['password_hash'], PASSWORD_DEFAULT);
@@ -20,15 +33,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
 
-        // Insert data admin
+        // Insert data admin (hanya jika id admin = 5)
         $stmt = $pdo->prepare("
-            INSERT INTO users (nama_lengkap, nomor_induk, email, username, password_hash, role, status)
-            VALUES (:nama_lengkap, :nomor_induk, :email, :username, :password_hash, :role, :status)
+            INSERT INTO users (nama_lengkap, nim, email, username, password_hash, role, status)
+            VALUES (:nama_lengkap, :nim, :email, :username, :password_hash, :role, :status)
         ");
 
         $stmt->execute([
             ':nama_lengkap' => $nama_lengkap,
-            ':nomor_induk' => $nomor_induk,
+            ':nim' => $nim,
             ':email' => $email,
             ':username' => $username,
             ':password_hash' => $password_hash,

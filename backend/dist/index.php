@@ -2,19 +2,19 @@
 session_start();
 require_once __DIR__ . '/../config/db.php';
 
-// ====== CEK LOGIN DAN ROLE ADMIN ======
-if (!isset($_SESSION['username']) || $_SESSION['role'] !== 'admin') {
-  header("Location: ../../frontend/auth.php");
-  exit;
-}
+// // ====== CEK LOGIN DAN ROLE ADMIN ======
+// if (!isset($_SESSION['username']) || $_SESSION['role'] !== 'admin') {
+//   header("Location: ../../frontend/auth.php");
+//   exit;
+// }
 
 // ====== AMBIL DATA DARI DATABASE ======
 try {
   $stmt1 = $pdo->query("SELECT COUNT(*) AS total FROM dokumen");
   $total_dokumen = $stmt1->fetch(PDO::FETCH_ASSOC)['total'];
 
-  $stmt2 = $pdo->query("SELECT COUNT(*) AS total FROM master_author");
-  $total_author = $stmt2->fetch(PDO::FETCH_ASSOC)['total'];
+  $stmt2 = $pdo->query("SELECT COUNT(*) AS total FROM master_tema");
+  $total_tema = $stmt2->fetch(PDO::FETCH_ASSOC)['total'];
 
   $stmt3 = $pdo->query("SELECT COUNT(*) AS total FROM users");
   $total_user = $stmt3->fetch(PDO::FETCH_ASSOC)['total'];
@@ -22,7 +22,26 @@ try {
   $stmt4 = $pdo->query("SELECT COUNT(*) AS total FROM log_review");
   $total_review = $stmt4->fetch(PDO::FETCH_ASSOC)['total'];
 } catch (PDOException $e) {
-  $total_dokumen = $total_author = $total_user = $total_review = "Error";
+  $total_dokumen = $total_tema = $total_user = $total_review = "Error";
+}
+
+// ====== DOKUMEN TERBARU (JOIN SESUAI STRUKTUR TABEL) ======
+try {
+  $stmt = $pdo->query("
+    SELECT 
+      d.dokumen_id,
+      d.judul,
+      th.tahun AS tahun,
+      s.nama_status AS status
+    FROM dokumen d
+    LEFT JOIN master_tahun th ON th.tahun = th.tahun
+    LEFT JOIN master_status_dokumen s ON d.status_id = s.status_id
+    ORDER BY d.tgl_unggah DESC
+    LIMIT 10
+  ");
+  $dokumen_terbaru = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+  $dokumen_terbaru = [];
 }
 ?>
 <!DOCTYPE html>
@@ -33,6 +52,8 @@ try {
   <title>SIPORA - Dashboard Admin</title>
 
   <!-- CSS -->
+   <link rel="stylesheet" href="assets/css/sipora-admin.css">
+
   <link rel="stylesheet" href="assets/vendors/feather/feather.css">
   <link rel="stylesheet" href="assets/vendors/ti-icons/css/themify-icons.css">
   <link rel="stylesheet" href="assets/vendors/css/vendor.bundle.base.css">
@@ -40,6 +61,9 @@ try {
   <link rel="stylesheet" href="assets/vendors/mdi/css/materialdesignicons.min.css">
   <link rel="stylesheet" href="assets/css/style.css">
   <link rel="shortcut icon" href="assets/images/favicon.png" />
+
+
+  
 </head>
 
 <body>
@@ -64,9 +88,9 @@ try {
       <!-- ====== KARTU STATISTIK ====== -->
       <div class="row">
         <div class="col-md-6 grid-margin stretch-card">
-          <div class="card tale-bg">
+          <div class="">
             <div class="card-people mt-auto">
-              <img src="assets/images/dashboard/people.svg" alt="people">
+              <img src="assets/images/dashboard/repository.png" alt="people">
             </div>
           </div>
         </div>
@@ -84,8 +108,8 @@ try {
             <div class="col-md-6 mb-4 stretch-card transparent">
               <div class="card card-dark-blue">
                 <div class="card-body">
-                  <p class="mb-4">Total Author</p>
-                  <p class="fs-30 mb-2"><?= $total_author; ?></p>
+                  <p class="mb-4">Total Tema</p>
+                  <p class="fs-30 mb-2"><?= $total_tema; ?></p>
                 </div>
               </div>
             </div>
@@ -95,7 +119,7 @@ try {
             <div class="col-md-6 mb-4 mb-lg-0 stretch-card transparent">
               <div class="card card-light-blue">
                 <div class="card-body">
-                  <p class="mb-4">Total Review</p>
+                  <p class="mb-4">Aktivitas Dokumen</p>
                   <p class="fs-30 mb-2"><?= $total_review; ?></p>
                 </div>
               </div>
@@ -113,47 +137,43 @@ try {
         </div>
       </div>
 
-      <!-- ====== DAFTAR DOKUMEN TERBARU ====== -->
-      <div class="row mt-4">
-        <div class="col-md-12 grid-margin stretch-card">
-          <div class="card">
-            <div class="card-body">
-              <p class="card-title mb-3">📄 Daftar Dokumen Terbaru</p>
-              <div class="table-responsive">
-                <table class="table table-striped table-borderless">
-                  <thead>
-                    <tr>
-                      <th>ID</th>
-                      <th>Judul</th>
-                      <th>Tahun</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <?php
-                    try {
-                      $stmt = $pdo->query("SELECT dokumen_id, judul, tahun, status FROM dokumen ORDER BY dokumen_id DESC LIMIT 10");
-                      while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-                        echo "<tr>
-                                <td>{$row['dokumen_id']}</td>
-                                <td>{$row['judul']}</td>
-                                <td>{$row['tahun']}</td>
-                                <td><span class='badge badge-success'>{$row['status']}</span></td>
-                              </tr>";
-                      }
-                    } catch (PDOException $e) {
-                      echo "<tr><td colspan='4'>Error loading data</td></tr>";
-                    }
-                    ?>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+    <div class="row mt-4">
+  <div class="col-md-12">
+    <div class="custom-card">
+      <div class="judul-section">📄 Dokumen Terbaru</div>
+
+    <table class="table table-bordered table-hover align-middle table-custom">
+<thead class="table-header-custom text-center">
+
+          <tr>
+            <th>ID</th>
+            <th>Judul</th>
+            <th>Tahun</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+        <?php if (!empty($dokumen_terbaru)): ?>
+          <?php foreach ($dokumen_terbaru as $d): ?>
+            <tr>
+              <td><?= htmlspecialchars($d['dokumen_id']); ?></td>
+              <td><?= htmlspecialchars($d['judul']); ?></td>
+              <td><?= htmlspecialchars($d['tahun']); ?></td>
+              <td><?= htmlspecialchars($d['status']); ?></td>
+            </tr>
+          <?php endforeach; ?>
+        <?php else: ?>
+          <tr>
+            <td colspan="4" style="text-align:center;">Tidak ada data</td>
+          </tr>
+        <?php endif; ?>
+        </tbody>
+      </table>
 
     </div>
+  </div>
+</div>
+
     <?php include 'footer.php'; ?>
   </div>
 

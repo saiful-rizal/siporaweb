@@ -13,6 +13,8 @@ $mahasiswa = $stmt->fetchAll(PDO::FETCH_ASSOC);
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
   <title>SIPORA - Data Mahasiswa</title>
+  <link rel="stylesheet" href="assets/css/sipora-admin.css">
+
   <link rel="stylesheet" href="assets/vendors/feather/feather.css">
   <link rel="stylesheet" href="assets/vendors/ti-icons/css/themify-icons.css">
   <link rel="stylesheet" href="assets/vendors/css/vendor.bundle.base.css">
@@ -34,9 +36,9 @@ $mahasiswa = $stmt->fetchAll(PDO::FETCH_ASSOC);
         <h4 class="card-title mb-4">Data Mahasiswa Terdaftar</h4>
         <p class="card-description">Berikut adalah daftar mahasiswa yang telah melakukan registrasi akun SIPORA.</p>
 
-        <div class="table-responsive">
-          <table class="table table-hover table-bordered align-middle">
-            <thead class="table-primary text-center">
+       <div class="table-responsive">
+<table class="table table-bordered table-hover align-middle table-custom">
+<thead class="table-header-custom text-center">
               <tr>
                 <th>#</th>
                 <th>Nama Lengkap</th>
@@ -54,7 +56,7 @@ $mahasiswa = $stmt->fetchAll(PDO::FETCH_ASSOC);
               <tr>
                 <td class="text-center"><?= $no++; ?></td>
                 <td><?= htmlspecialchars($mhs['nama_lengkap']); ?></td>
-                <td><?= htmlspecialchars($mhs['nomor_induk']); ?></td>
+                <td><?= htmlspecialchars($mhs['nim']); ?></td>
                 <td><?= htmlspecialchars($mhs['email']); ?></td>
                 <td><?= htmlspecialchars($mhs['username']); ?></td>
                 <td class="text-center"><?= htmlspecialchars(date('d-m-Y H:i', strtotime($mhs['created_at']))); ?></td>
