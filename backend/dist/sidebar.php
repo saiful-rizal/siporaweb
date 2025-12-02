@@ -10,21 +10,21 @@
        <li class="nav-item">
           <a class="nav-link" href="form_admin.php">
             <i class="icon-columns menu-icon"></i>
-            <span class="menu-title">Form Tambah Admin</span>
+            <span class="menu-title">Manajemen Admin</span>
             <i class="menu-title"></i>
           </a>
         </li>
          <li class="nav-item">
           <a class="nav-link" href="chartjs.php">
             <i class="icon-bar-graph menu-icon"></i>
-            <span class="menu-title">Charts Dokumen</span>
+            <span class="menu-title">Statistik Dokumen</span>
             <i class="menu-title"></i>
           </a>
         </li>
 <li class="nav-item">
     <a class="nav-link" data-bs-toggle="collapse" href="#tables" aria-expanded="false">
         <i class="icon-grid-2 menu-icon"></i>
-        <span class="menu-title">Tabel</span>
+        <span class="menu-title">Review Data</span>
         <i class="menu-arrow"></i>
     </a>
     <div class="collapse" id="tables">
@@ -33,7 +33,7 @@
                 <a class="nav-link" href="data_mahasiswa.php">Data Mahasiswa</a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" href="tabel_dokumen.php">Dokumen</a>
+                <a class="nav-link" href="tabel_dokumen.php">Data Dokumen</a>
             </li>
         </ul>
     </div>
@@ -51,7 +51,7 @@
         <li class="nav-item">
           <a class="nav-link" href="report.php">
             <i class="icon-paper menu-icon"></i>
-            <span class="menu-title">Report</span>
+            <span class="menu-title">Laporan</span>
           </a>
         </li>
       </ul>
