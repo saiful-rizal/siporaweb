@@ -5,7 +5,7 @@ include 'sidebar.php';
 
 $search = $_GET['search'] ?? '';
 $filter_jurusan = $_GET['jurusan'] ?? '';
-$filter_prodi = $_GET['prodi'] ?? '';
+$filter_prodi   = $_GET['prodi'] ?? '';
 
 $jurusanList = $pdo->query("SELECT * FROM master_jurusan ORDER BY nama_jurusan")->fetchAll(PDO::FETCH_ASSOC);
 $prodiList   = $pdo->query("SELECT * FROM master_prodi ORDER BY nama_prodi")->fetchAll(PDO::FETCH_ASSOC);
@@ -130,7 +130,7 @@ $dokumen = $stmt->fetchAll(PDO::FETCH_ASSOC);
          <div class="table-responsive">
 <table class="table table-bordered table-hover align-middle table-custom">
 <thead class="table-header-custom text-center">
-              <tr>
+<tr>
   <th>#</th>
   <th>Judul</th>
   <th>Uploader</th>
@@ -161,11 +161,11 @@ $dokumen = $stmt->fetchAll(PDO::FETCH_ASSOC);
   <!-- FILE TURNITIN -->
   <td class="text-center">
     <?php if (!empty($row['turnitin_file'])): ?>
-      <a href="/siporaweb/frontend/uploads/turnitin/<?= $row['turnitin_file']; ?>" 
-         target="_blank"
-         class="btn btn-outline-primary btn-sm">
+      <button type="button"
+              class="btn btn-outline-primary btn-sm"
+              onclick="previewDokumenTurnitin('<?= $row['turnitin_file']; ?>')">
         <i class="mdi mdi-file"></i> Lihat
-      </a>
+      </button>
     <?php else: ?>
       <span class="text-muted">Belum ada</span>
     <?php endif; ?>
@@ -185,16 +185,17 @@ $dokumen = $stmt->fetchAll(PDO::FETCH_ASSOC);
     ?>
   </td>
 
+  <!-- Aksi -->
   <td class="text-center">
 
-    <!-- PREVIEW -->
+    <!-- PREVIEW DOKUMEN UTAMA -->
     <button type="button" 
             class="btn btn-outline-secondary btn-sm"
             onclick="previewDokumen('<?= $row['file_path']; ?>')">
       <i class="mdi mdi-eye"></i> Preview
     </button>
 
-        <?php if ($status === 'menunggu review' || $status === 'diperiksa'): ?>
+    <?php if ($status === 'menunggu review' || $status === 'diperiksa'): ?>
       <a href="proses_dokumen.php?id=<?= $row['dokumen_id']; ?>&aksi=approve" 
          class="btn btn-success btn-sm">
          <i class="mdi mdi-check"></i> Approve
@@ -233,6 +234,7 @@ $dokumen = $stmt->fetchAll(PDO::FETCH_ASSOC);
 </div>
 <?php include 'footer.php'; ?>
 </div>
+
 <!-- =========================== -->
 <!-- 🔹 MODAL PREVIEW DOKUMEN   -->
 <!-- =========================== -->
@@ -295,13 +297,30 @@ $dokumen = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 <script>
 /* =============================
-   PREVIEW DOKUMEN
+   PREVIEW DOKUMEN UTAMA
 ============================= */
 function previewDokumen(file) {
-    let url = "/siporaweb/frontend/uploads/documents/" + file;
+    if (!file) return;
+
+    // Kalau file sudah mengandung folder -> gunakan apa adanya
+    let url = file.includes('/') ? file : "/siporaweb/frontend/uploads/documents/" + encodeURIComponent(file);
+
     document.getElementById("iframePreview").src = url;
     new bootstrap.Modal(document.getElementById("modalPreview")).show();
 }
+
+/* =============================
+   PREVIEW FILE TURNITIN
+============================= */
+function previewDokumenTurnitin(file) {
+    if (!file) return;
+
+    let url = "/siporaweb/frontend/uploads/turnitin/" + encodeURIComponent(file);    
+    document.getElementById("iframePreview").src = url;
+
+    new bootstrap.Modal(document.getElementById("modalPreview")).show();
+}
+
 
 /* =============================
    BUKA MODAL REJECT
