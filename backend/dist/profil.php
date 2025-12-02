@@ -423,22 +423,26 @@ document.getElementById('formUbahPassword').addEventListener('submit', function(
       const data = result.value;
       
       if (data.success) {
-        // Tutup modal
-        const modal = bootstrap.Modal.getInstance(document.getElementById('ubahPasswordModal'));
-        modal.hide();
-        
-        // Reset form
-        document.getElementById('formUbahPassword').reset();
-        
-        // Tampilkan notifikasi sukses
-        Swal.fire({
-          title: 'Berhasil!',
-          text: data.message,
-          icon: 'success',
-          confirmButtonColor: '#28a745',
-          timer: 2000,
-          timerProgressBar: true
-        });
+          // Tutup modal
+          const modal = bootstrap.Modal.getInstance(document.getElementById('ubahPasswordModal'));
+          if (modal) {
+            modal.hide();
+          }
+          // Hapus backdrop jika masih ada
+          document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+
+          // Reset form
+          document.getElementById('formUbahPassword').reset();
+
+          // Tampilkan notifikasi sukses
+          Swal.fire({
+            title: 'Berhasil!',
+            text: data.message,
+            icon: 'success',
+            confirmButtonColor: '#28a745',
+            timer: 2000,
+            timerProgressBar: true
+          });
       } else {
         // Tampilkan error spesifik
         if (data.field === 'password_lama') {

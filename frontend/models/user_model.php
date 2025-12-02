@@ -61,6 +61,12 @@ function hasProfilePhoto($user_id) {
     $photo_path = __DIR__ . '/../uploads/profile_photos/' . $user_id . '.jpg';
     return file_exists($photo_path);
 }
+if (!function_exists('hasProfilePhoto')) {
+    function hasProfilePhoto($user_id) {
+        $photo_path = __DIR__ . '/../uploads/profile_photos/' . $user_id . '.jpg';
+        return file_exists($photo_path);
+    }
+}
 
 function getProfilePhotoUrl($user_id, $email, $username) {
     $photo_path = __DIR__ . '/../uploads/profile_photos/' . $user_id . '.jpg';
@@ -68,6 +74,16 @@ function getProfilePhotoUrl($user_id, $email, $username) {
         return 'uploads/profile_photos/' . $user_id . '.jpg?t=' . time();
     } else {
         return 'profile_image.php?id=' . $user_id . '&email=' . urlencode($email) . '&name=' . urlencode($username) . '&t=' . time();
+    }
+}
+if (!function_exists('getProfilePhotoUrl')) {
+    function getProfilePhotoUrl($user_id, $email, $username) {
+        $photo_path = __DIR__ . '/../uploads/profile_photos/' . $user_id . '.jpg';
+        if (file_exists($photo_path)) {
+            return 'uploads/profile_photos/' . $user_id . '.jpg?t=' . time();
+        } else {
+            return 'profile_image.php?id=' . $user_id . '&email=' . urlencode($email) . '&name=' . urlencode($username) . '&t=' . time();
+        }
     }
 }
 
@@ -103,6 +119,40 @@ function getInitialsHtml($username, $size = 'normal') {
     
     return "<div class='user-initials {$sizeClass}' style='background-color: {$bgColor}; color: {$textColor}; {$style}'>{$initials}</div>";
 }
+if (!function_exists('getInitialsHtml')) {
+    function getInitialsHtml($username, $size = 'normal') {
+        $username_parts = explode('_', $username);
+        if (count($username_parts) > 1) {
+            $initials = strtoupper(substr($username_parts[0], 0, 1) . substr(end($username_parts), 0, 1));
+        } else {
+            $initials = strtoupper(substr($username, 0, 2));
+        }
+        
+        $bgColor = getInitialsBackgroundColor($username);
+        $textColor = getContrastColor($bgColor);
+        
+        $sizeClass = '';
+        $style = '';
+        
+        switch($size) {
+            case 'small':
+                $sizeClass = 'initials-small';
+                $style = "width: 40px; height: 40px; font-size: 16px;";
+                break;
+            case 'large':
+                $sizeClass = 'initials-large';
+                $style = "width: 100px; height: 100px; font-size: 36px;";
+                break;
+            case 'normal':
+            default:
+                $sizeClass = 'initials-normal';
+                $style = "width: 68px; height: 68px; font-size: 24px;";
+                break;
+        }
+        
+        return "<div class='user-initials {$sizeClass}' style='background-color: {$bgColor}; color: {$textColor}; {$style}'>{$initials}</div>";
+    }
+}
 
 function getRoleName($role) {
     switch($role) {
@@ -110,6 +160,16 @@ function getRoleName($role) {
         case 2: return 'Mahasiswa';
         case 3: return 'Dosen';
         default: return 'Pengguna';
+    }
+}
+if (!function_exists('getRoleName')) {
+    function getRoleName($role) {
+        switch($role) {
+            case 1: return 'Admin';
+            case 2: return 'Mahasiswa';
+            case 3: return 'Dosen';
+            default: return 'Pengguna';
+        }
     }
 }
 

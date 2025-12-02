@@ -107,45 +107,47 @@ if ($user_id > 0) {
             error_log("Error fetching user documents: " . $e->getMessage());
         }
         
-        // Get new documents from other users
-        try {
-            $stmt = $pdo->prepare("
-                SELECT 
-                    d.dokumen_id,
-                    d.judul,
-                    d.tgl_unggah,
-                    d.uploader_id,
-                    u.username as uploader_name
-                FROM dokumen d
-                LEFT JOIN users u ON d.uploader_id = u.id_user
-                WHERE d.uploader_id != :user_id 
-                AND d.tgl_unggah > DATE_SUB(NOW(), INTERVAL 7 DAY)
-                ORDER BY d.tgl_unggah DESC 
-                LIMIT 10
-            ");
-            $stmt->execute(['user_id' => $user_id]);
-            $newDocs = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
-            if ($newDocs) {
-                foreach ($newDocs as $doc) {
-                    $time_ago = getTimeAgo($doc['tgl_unggah']);
-                    $uploader_name = isset($doc['uploader_name']) ? $doc['uploader_name'] : 'Unknown';
-                    $notifications[] = [
-                        'title' => 'Dokumen Baru',
-                        'message' => "<strong>" . htmlspecialchars($uploader_name, ENT_QUOTES, 'UTF-8') . "</strong> mengunggah dokumen: \"" . htmlspecialchars($doc['judul'], ENT_QUOTES, 'UTF-8') . "\"",
-                        'time' => $time_ago,
-                        'icon_type' => 'info',
-                        'icon_class' => 'bi-file-earmark-plus',
-                        'doc_id' => $doc['dokumen_id'],
-                        'judul' => $doc['judul'],
-                        'uploader_name' => $uploader_name,
-                        'type' => 'new_document',
-                        'timestamp' => strtotime($doc['tgl_unggah'])
-                    ];
+        // Get new documents from other users (hanya untuk admin)
+        if ($user_data['role'] == 1) {
+            try {
+                $stmt = $pdo->prepare("
+                    SELECT 
+                        d.dokumen_id,
+                        d.judul,
+                        d.tgl_unggah,
+                        d.uploader_id,
+                        u.username as uploader_name
+                    FROM dokumen d
+                    LEFT JOIN users u ON d.uploader_id = u.id_user
+                    WHERE d.uploader_id != :user_id 
+                    AND d.tgl_unggah > DATE_SUB(NOW(), INTERVAL 7 DAY)
+                    ORDER BY d.tgl_unggah DESC 
+                    LIMIT 10
+                ");
+                $stmt->execute(['user_id' => $user_id]);
+                $newDocs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                
+                if ($newDocs) {
+                    foreach ($newDocs as $doc) {
+                        $time_ago = getTimeAgo($doc['tgl_unggah']);
+                        $uploader_name = isset($doc['uploader_name']) ? $doc['uploader_name'] : 'Unknown';
+                        $notifications[] = [
+                            'title' => 'Dokumen Baru',
+                            'message' => "<strong>" . htmlspecialchars($uploader_name, ENT_QUOTES, 'UTF-8') . "</strong> mengunggah dokumen: \"" . htmlspecialchars($doc['judul'], ENT_QUOTES, 'UTF-8') . "\"",
+                            'time' => $time_ago,
+                            'icon_type' => 'info',
+                            'icon_class' => 'bi-file-earmark-plus',
+                            'doc_id' => $doc['dokumen_id'],
+                            'judul' => $doc['judul'],
+                            'uploader_name' => $uploader_name,
+                            'type' => 'new_document',
+                            'timestamp' => strtotime($doc['tgl_unggah'])
+                        ];
+                    }
                 }
+            } catch (PDOException $e) {
+                error_log("Error fetching new documents: " . $e->getMessage());
             }
-        } catch (PDOException $e) {
-            error_log("Error fetching new documents: " . $e->getMessage());
         }
         
         // Get download history
