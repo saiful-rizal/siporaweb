@@ -912,6 +912,38 @@ nav {
     box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
 
+.btn-edit-avatar {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+    color: var(--white);
+    border: 3px solid var(--white);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    transition: var(--transition);
+    box-shadow: 0 2px 8px rgba(0, 88, 228, 0.3);
+}
+
+.btn-edit-avatar:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(0, 88, 228, 0.4);
+}
+
+#cameraVideo {
+    background-color: var(--gray-900);
+}
+
+canvas {
+    display: none;
+}
+
 .profile-info h4 {
     font-size: 1.3rem;
     font-weight: 600;
@@ -1428,7 +1460,7 @@ nav {
             </div>
             <div class="modal-body">
                 <div class="profile-header">
-                    <div id="modalAvatarContainer">
+                    <div id="modalAvatarContainer" style="position: relative;">
                         <?php 
                         if (hasProfilePhoto($user_id)) {
                             echo '<img src="' . getProfilePhotoUrl($user_id, $user_data['email'], $user_data['username']) . '" alt="User Avatar" class="profile-avatar" id="profileAvatarImg">';
@@ -1436,6 +1468,9 @@ nav {
                             echo getInitialsHtml($user_data['username'], 'large');
                         }
                         ?>
+                        <button class="btn-edit-avatar" onclick="openChangeProfileModal()" title="Ubah Foto Profil">
+                            <i class="bi bi-camera-fill"></i>
+                        </button>
                     </div>
                     <div class="profile-info">
                         <h4><?php echo htmlspecialchars($user_data['username'], ENT_QUOTES, 'UTF-8'); ?></h4>
@@ -1574,6 +1609,64 @@ nav {
                         Tutup
                     </button>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="changeProfileModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Ubah Foto Profil</h5>
+                <button type="button" class="modal-close" onclick="closeModal('changeProfileModal')">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
+                    <button class="btn btn-primary" onclick="startCamera()" style="flex: 1;">
+                        <i class="bi bi-camera-video"></i>
+                        Ambil Foto dari Kamera
+                    </button>
+                    <button class="btn btn-secondary" onclick="document.getElementById('fileInput').click()" style="flex: 1;">
+                        <i class="bi bi-upload"></i>
+                        Upload Foto
+                    </button>
+                </div>
+                
+                <input type="file" id="fileInput" accept="image/*" style="display: none;" onchange="handleFileSelect(event)">
+                
+                <div id="cameraContainer" style="display: none; margin-bottom: 1.5rem;">
+                    <video id="cameraVideo" style="width: 100%; border-radius: 8px; margin-bottom: 1rem;"></video>
+                    <div style="display: flex; gap: 0.8rem;">
+                        <button class="btn btn-primary" onclick="capturePhoto()" style="flex: 1;">
+                            <i class="bi bi-check-circle"></i>
+                            Ambil Foto
+                        </button>
+                        <button class="btn btn-secondary" onclick="stopCamera()" style="flex: 1;">
+                            <i class="bi bi-x-circle"></i>
+                            Batal
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="previewContainer" style="display: none;">
+                    <p style="font-weight: 600; margin-bottom: 1rem; color: var(--gray-800);">Pratinjau Foto:</p>
+                    <img id="photoPreview" style="width: 100%; border-radius: 8px; margin-bottom: 1rem; object-fit: cover; max-height: 300px;">
+                    <div style="display: flex; gap: 0.8rem;">
+                        <button class="btn btn-primary" onclick="uploadPhoto()" style="flex: 1;">
+                            <i class="bi bi-cloud-upload"></i>
+                            Simpan Foto
+                        </button>
+                        <button class="btn btn-secondary" onclick="resetPreview()" style="flex: 1;">
+                            <i class="bi bi-arrow-counterclockwise"></i>
+                            Ulang
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="uploadStatus" style="display: none; margin-top: 1rem; padding: 1rem; border-radius: 8px; text-align: center;"></div>
             </div>
         </div>
     </div>
@@ -1738,6 +1831,159 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('profileModal').classList.add('show');
         closeAllDropdowns();
     };
+
+    window.openChangeProfileModal = function() {
+        resetPreview();
+        closeModal('profileModal');
+        document.getElementById('changeProfileModal').classList.add('show');
+    };
+
+    let cameraStream = null;
+    let photoData = null;
+
+    window.startCamera = function() {
+        const cameraContainer = document.getElementById('cameraContainer');
+        const previewContainer = document.getElementById('previewContainer');
+        
+        cameraContainer.style.display = 'block';
+        previewContainer.style.display = 'none';
+        
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
+            .then(stream => {
+                cameraStream = stream;
+                const video = document.getElementById('cameraVideo');
+                video.srcObject = stream;
+                video.play();
+            })
+            .catch(err => {
+                console.error('Error accessing camera:', err);
+                showModalNotification('Gagal mengakses kamera. Pastikan Anda telah memberikan izin akses.', 'error');
+                cameraContainer.style.display = 'none';
+            });
+    };
+
+    window.stopCamera = function() {
+        if (cameraStream) {
+            cameraStream.getTracks().forEach(track => track.stop());
+            cameraStream = null;
+        }
+        document.getElementById('cameraContainer').style.display = 'none';
+    };
+
+    window.capturePhoto = function() {
+        const video = document.getElementById('cameraVideo');
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const context = canvas.getContext('2d');
+        context.drawImage(video, 0, 0);
+        
+        photoData = canvas.toDataURL('image/jpeg', 0.95);
+        
+        const previewImg = document.getElementById('photoPreview');
+        previewImg.src = photoData;
+        
+        document.getElementById('cameraContainer').style.display = 'none';
+        document.getElementById('previewContainer').style.display = 'block';
+        
+        stopCamera();
+    };
+
+    window.handleFileSelect = function(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        if (!file.type.startsWith('image/')) {
+            showModalNotification('Silakan pilih file gambar yang valid.', 'error');
+            return;
+        }
+        
+        if (file.size > 5 * 1024 * 1024) {
+            showModalNotification('Ukuran file tidak boleh lebih dari 5MB.', 'error');
+            return;
+        }
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            photoData = e.target.result;
+            
+            const previewImg = document.getElementById('photoPreview');
+            previewImg.src = photoData;
+            
+            document.getElementById('cameraContainer').style.display = 'none';
+            document.getElementById('previewContainer').style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    };
+
+    window.uploadPhoto = function() {
+        if (!photoData) {
+            showModalNotification('Silakan ambil atau pilih foto terlebih dahulu.', 'error');
+            return;
+        }
+        
+        const uploadStatus = document.getElementById('uploadStatus');
+        uploadStatus.style.display = 'block';
+        uploadStatus.style.backgroundColor = 'var(--info-color)';
+        uploadStatus.style.color = 'var(--white)';
+        uploadStatus.innerHTML = '<i class="bi bi-hourglass-split"></i> Mengunggah foto...';
+        
+        fetch('upload_profile_photo.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ photo: photoData })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                uploadStatus.style.backgroundColor = 'var(--success-color)';
+                uploadStatus.innerHTML = '<i class="bi bi-check-circle"></i> Foto profil berhasil diubah!';
+                
+                setTimeout(() => {
+                    // Reload profile images
+                    location.reload();
+                }, 1500);
+            } else {
+                uploadStatus.style.backgroundColor = 'var(--danger-color)';
+                uploadStatus.innerHTML = '<i class="bi bi-exclamation-circle"></i> ' + (data.message || 'Gagal mengunggah foto.');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            uploadStatus.style.backgroundColor = 'var(--danger-color)';
+            uploadStatus.innerHTML = '<i class="bi bi-exclamation-circle"></i> Terjadi kesalahan saat mengunggah.';
+        });
+    };
+
+    window.resetPreview = function() {
+        photoData = null;
+        document.getElementById('photoPreview').src = '';
+        document.getElementById('fileInput').value = '';
+        document.getElementById('previewContainer').style.display = 'none';
+        document.getElementById('cameraContainer').style.display = 'none';
+        document.getElementById('uploadStatus').style.display = 'none';
+        stopCamera();
+    };
+
+    function showModalNotification(message, type = 'success') {
+        const modal = document.getElementById('changeProfileModal');
+        const uploadStatus = document.getElementById('uploadStatus');
+        
+        if (modal && modal.classList.contains('show')) {
+            uploadStatus.style.display = 'block';
+            uploadStatus.style.backgroundColor = type === 'error' ? 'var(--danger-color)' : 'var(--success-color)';
+            uploadStatus.style.color = 'var(--white)';
+            uploadStatus.innerHTML = `<i class="bi bi-${type === 'error' ? 'exclamation-circle' : 'check-circle'}"></i> ${message}`;
+            
+            if (type !== 'error') {
+                setTimeout(() => {
+                    uploadStatus.style.display = 'none';
+                }, 3000);
+            }
+        }
+    }
 
     window.openHelpModal = function() {
         closeModal('profileModal');

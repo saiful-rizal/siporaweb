@@ -17,19 +17,19 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'get_detail' && isset($_GET['id'])
 
     try {
         $stmt = $pdo->prepare("
-            SELECT d.*, 
-                   u.username as uploader_name, 
-                   u.email as uploader_email,
-                   j.nama_jurusan,
-                   p.nama_prodi,
-                   t.nama_tema,
-                   y.tahun
-            FROM documents d
-            LEFT JOIN users u ON d.id_user = u.id_user
-            LEFT JOIN jurusan j ON d.id_jurusan = j.id_jurusan
-            LEFT JOIN prodi p ON d.id_prodi = p.id_prodi
-            LEFT JOIN tema t ON d.id_tema = t.id_tema
-            LEFT JOIN tahun y ON d.id_tahun = y.year_id
+                 SELECT d.*, 
+                     u.username as uploader_name, 
+                     u.email as uploader_email,
+                     j.nama_jurusan,
+                     p.nama_prodi,
+                     t.nama_tema,
+                     y.tahun
+                 FROM dokumen d
+                 LEFT JOIN users u ON d.uploader_id = u.id_user
+                 LEFT JOIN master_jurusan j ON d.id_jurusan = j.id_jurusan
+                 LEFT JOIN master_prodi p ON d.id_prodi = p.id_prodi
+                 LEFT JOIN master_tema t ON d.id_tema = t.id_tema
+                 LEFT JOIN master_tahun y ON d.year_id = y.year_id
             WHERE d.dokumen_id = :document_id
             LIMIT 1
         ");
@@ -42,29 +42,17 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'get_detail' && isset($_GET['id'])
             exit();
         }
 
-        $stmt = $pdo->prepare("
-            SELECT a.nama_penulis, a.afiliasi
-            FROM penulis_dokumen pd
-            JOIN penulis a ON pd.id_penulis = a.id_penulis
-            WHERE pd.dokumen_id = :document_id
-        ");
-        $stmt->execute(['document_id' => $document['dokumen_id']]);
-        $authors = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        $stmt = $pdo->prepare("
-            SELECT k.keyword
-            FROM keyword_dokumen kd
-            JOIN keyword k ON kd.id_keyword = k.id_keyword
-            WHERE kd.dokumen_id = :document_id
-        ");
-        $stmt->execute(['document_id' => $document['dokumen_id']]);
-        $keywords = $stmt->fetchAll(PDO::FETCH_COLUMN);
-
         $filePath = $document['file_path'] ?? '';
         $fileName = basename($filePath);
         $fileURL = $BASE_URL . $fileName;
         $fileExt = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
         $fileSize = (!empty($filePath) && file_exists($filePath)) ? filesize($filePath) : 0;
+
+        // Parse keywords from the kata_kunci field (comma-separated)
+        $keywords = [];
+        if (!empty($document['kata_kunci'])) {
+            $keywords = array_map('trim', explode(',', $document['kata_kunci']));
+        }
 
         $response = [
             'success' => true,
@@ -86,16 +74,18 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'get_detail' && isset($_GET['id'])
                 'status_name' => getStatusName($document['status_id']),
                 'status_badge' => getStatusBadge($document['status_id']),
                 'turnitin' => $document['turnitin'],
-                'authors' => $authors,
+                'turnitin_file' => $document['turnitin_file'],
+                'kata_kunci' => $document['kata_kunci'],
                 'keywords' => $keywords,
-                'can_edit' => isset($_SESSION['user_id']) && ($_SESSION['user_id'] == $document['id_user'] || $_SESSION['role'] == 'admin'),
-                'created_at' => $document['created_at'],
-                'updated_at' => $document['updated_at'],
+                'id_divisi' => $document['id_divisi'],
+                'can_edit' => isset($_SESSION['user_id']) && ($_SESSION['user_id'] == $document['uploader_id'] || $_SESSION['role'] == 'admin'),
+                'created_at' => $document['tgl_unggah'],
+                'updated_at' => $document['tgl_unggah'],
                 'id_jurusan' => $document['id_jurusan'],
                 'id_prodi' => $document['id_prodi'],
                 'id_tema' => $document['id_tema'],
-                'id_tahun' => $document['id_tahun'],
-                'id_user' => $document['id_user']
+                'year_id' => $document['year_id'],
+                'uploader_id' => $document['uploader_id']
             ]
         ];
 
@@ -184,14 +174,15 @@ try {
             --border-color: #dcdcdc;
             --shadow-sm: 0 2px 8px rgba(0,0,0,0.05);
             --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+            --shadow-lg: 0 10px 25px rgba(0,0,0,0.1);
             --success-color: #28a745;
             --warning-color: #ffc107;
             --danger-color: #dc3545;
             --modal-backdrop: rgba(0, 0, 0, 0.6);
             --modal-bg: #ffffff;
-            --modal-header-bg: #f8f9fa;
+            --modal-header-bg: linear-gradient(135deg, #0058e4 0%, #1976d2 100%);
             --modal-border-color: #dee2e6;
-            --modal-shadow: 0 10px 50px rgba(0, 0, 0, 0.3);
+            --modal-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
         }
 
         * {
@@ -261,7 +252,7 @@ try {
             }
         }
 
-        /* Document Modal Styles */
+        /* Document Modal Styles - Enhanced */
         .document-modal {
             display: none;
             position: fixed;
@@ -271,7 +262,7 @@ try {
             width: 100%;
             height: 100%;
             background-color: var(--modal-backdrop);
-            backdrop-filter: blur(4px);
+            backdrop-filter: blur(5px);
             animation: fadeIn 0.3s ease-out;
         }
 
@@ -287,7 +278,7 @@ try {
 
         .document-modal-content {
             background: var(--modal-bg);
-            border-radius: 12px;
+            border-radius: 16px;
             box-shadow: var(--modal-shadow);
             width: 100%;
             max-width: 900px;
@@ -297,42 +288,60 @@ try {
             flex-direction: column;
             overflow: hidden;
             animation: slideUp 0.4s ease-out;
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
 
         .document-modal-header {
-            padding: 1rem 1.5rem;
-            border-bottom: 1px solid var(--modal-border-color);
+            padding: 1.25rem 1.5rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex-shrink: 0;
-            background-color: var(--modal-header-bg);
+            background: var(--modal-header-bg);
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .document-modal-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M30 30c0-11.046 8.954-20 20-20s20 8.954 20 20-8.954 20-20 20-20-8.954-20-20zm0 2c9.941 0 18 8.059 18 18s-8.059 18-18 18-18-8.059-18-18-18z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+            opacity: 0.4;
         }
 
         .document-modal-title {
             font-size: 1.25rem;
             font-weight: 600;
-            color: var(--text-primary);
+            color: white;
             margin: 0;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
             max-width: 80%;
+            position: relative;
+            z-index: 1;
         }
 
         .document-modal-close {
-            background: none;
+            background: rgba(255, 255, 255, 0.15);
             border: none;
             font-size: 1.25rem;
-            color: var(--text-secondary);
+            color: white;
             cursor: pointer;
-            padding: 0.25rem;
+            padding: 0.5rem;
             border-radius: 50%;
-            transition: all 0.2s;
+            transition: all 0.3s;
+            position: relative;
+            z-index: 1;
         }
         .document-modal-close:hover {
-            background-color: var(--background-page);
-            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.25);
+            transform: rotate(90deg);
         }
 
         .document-modal-body {
@@ -340,164 +349,298 @@ try {
             flex-direction: column;
             flex-grow: 1;
             overflow: hidden;
+            background-color: #f9fafb;
         }
 
         .document-detail-tabs {
             display: flex;
             border-bottom: 1px solid var(--border-color);
-            background-color: var(--background-page);
+            background-color: white;
             flex-shrink: 0;
+            padding: 0 1rem;
         }
 
         .document-detail-tab {
-            padding: 0.75rem 1.25rem;
+            padding: 1rem 1.25rem;
             cursor: pointer;
             font-weight: 500;
             color: var(--text-secondary);
             border-bottom: 3px solid transparent;
-            transition: all 0.2s;
+            transition: all 0.3s;
             font-size: 0.9rem;
+            position: relative;
         }
         .document-detail-tab:hover {
             color: var(--primary-blue);
+            background-color: rgba(0, 88, 228, 0.05);
         }
         .document-detail-tab.active {
             color: var(--primary-blue);
             border-bottom-color: var(--primary-blue);
+            background-color: rgba(0, 88, 228, 0.05);
+        }
+        .document-detail-tab i {
+            margin-right: 0.5rem;
         }
 
         .document-detail-content {
             flex-grow: 1;
             overflow-y: auto;
-            padding: 1.25rem;
+            padding: 1.5rem;
             display: none;
+            background-color: #f9fafb;
         }
         .document-detail-content.active {
             display: block;
         }
 
+        /* Document Summary Card - NEW */
+        .document-summary-card {
+            background: linear-gradient(135deg, #f8f9ff 0%, #e9f0ff 100%);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid rgba(0, 88, 228, 0.1);
+        }
+        
+        .document-summary-header {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+            gap: 1rem;
+        }
+        
+        .document-icon {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, var(--primary-blue) 0%, #1976d2 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+        
+        .document-title-container {
+            flex-grow: 1;
+        }
+        
+        .document-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+            line-height: 1.3;
+        }
+        
+        .document-meta-info {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin-top: 0.5rem;
+        }
+        
+        .document-meta-item {
+            display: flex;
+            align-items: center;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+        
+        .document-meta-item i {
+            margin-right: 0.25rem;
+            color: var(--primary-blue);
+            font-size: 0.9rem;
+        }
+        
+        .document-badges {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+            flex-wrap: wrap;
+        }
+        
+        .document-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 50px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .document-description {
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            max-height: 4.5em;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .document-description.expanded {
+            max-height: none;
+        }
+        
+        .document-description-toggle {
+            color: var(--primary-blue);
+            font-weight: 500;
+            cursor: pointer;
+            margin-top: 0.5rem;
+            font-size: 0.85rem;
+        }
+        
+        .document-description-toggle:hover {
+            text-decoration: underline;
+        }
+
         .detail-container {
             display: flex;
             flex-direction: column;
-            gap: 1.25rem;
+            gap: 1.5rem;
         }
 
         .detail-section {
             background-color: var(--white);
-            border-radius: 8px;
-            padding: 1rem;
+            border-radius: 12px;
+            padding: 1.25rem;
             box-shadow: var(--shadow-sm);
+            transition: all 0.3s ease;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+        }
+        .detail-section:hover {
+            box-shadow: var(--shadow-md);
+            transform: translateY(-2px);
         }
 
         .detail-section-title {
-            font-size: 1rem;
+            font-size: 1.1rem;
             font-weight: 600;
             color: var(--text-primary);
-            margin-bottom: 0.75rem;
+            margin-bottom: 1rem;
             display: flex;
             align-items: center;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid #f0f0f0;
         }
         .detail-section-title i {
-            margin-right: 0.5rem;
-            font-size: 1rem;
+            margin-right: 0.75rem;
+            font-size: 1.2rem;
+            color: var(--primary-blue);
+            background-color: rgba(0, 88, 228, 0.1);
+            padding: 0.5rem;
+            border-radius: 8px;
         }
 
         .detail-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 0.75rem;
+            gap: 1rem;
         }
         .detail-item {
             display: flex;
             flex-direction: column;
+            padding: 0.75rem;
+            border-radius: 8px;
+            background-color: #f9fafb;
+            transition: all 0.2s;
+        }
+        .detail-item:hover {
+            background-color: #f0f4ff;
         }
         .detail-label {
             font-size: 0.75rem;
-            font-weight: 500;
+            font-weight: 600;
             color: var(--text-secondary);
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            margin-bottom: 0.25rem;
+            margin-bottom: 0.5rem;
         }
         .detail-value {
-            font-size: 0.9rem;
+            font-size: 0.95rem;
             color: var(--text-primary);
+            font-weight: 500;
         }
         
         .detail-value.badge {
             align-self: flex-start;
+            padding: 0.35rem 0.75rem;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 0.85rem;
         }
 
-        .author-list, .keyword-list {
+        .keyword-list {
             display: flex;
             flex-wrap: wrap;
-            gap: 0.5rem;
-        }
-        .author-card {
-            background-color: var(--background-page);
-            border-radius: 6px;
-            padding: 0.75rem;
-            flex-grow: 1;
-            flex-basis: 150px;
-        }
-        .author-name {
-            font-weight: 600;
-            color: var(--text-primary);
-            font-size: 0.9rem;
-        }
-        .author-affiliation {
-            font-size: 0.8rem;
-            color: var(--text-secondary);
+            gap: 0.75rem;
         }
         .keyword-badge {
-            background-color: var(--primary-light);
+            background: linear-gradient(135deg, var(--primary-light) 0%, #d4e2ff 100%);
             color: var(--primary-blue);
-            padding: 0.25rem 0.75rem;
+            padding: 0.4rem 0.9rem;
             border-radius: 50px;
-            font-size: 0.8rem;
+            font-size: 0.85rem;
+            font-weight: 500;
+            box-shadow: 0 2px 5px rgba(0, 88, 228, 0.1);
+            transition: all 0.2s;
+        }
+        .keyword-badge:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 88, 228, 0.15);
         }
 
         .action-buttons {
             display: flex;
-            gap: 0.75rem;
+            gap: 1rem;
             margin-top: 1rem;
+            flex-wrap: wrap;
         }
         .btn-action {
-            padding: 0.5rem 1rem;
-            border-radius: 6px;
+            padding: 0.65rem 1.25rem;
+            border-radius: 10px;
             font-weight: 500;
             text-decoration: none;
             display: inline-flex;
             align-items: center;
             gap: 0.5rem;
-            transition: all 0.2s;
-            font-size: 0.9rem;
+            transition: all 0.3s;
+            font-size: 0.95rem;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
         .btn-action i {
-            font-size: 0.9rem;
+            font-size: 1rem;
         }
         .btn-primary {
-            background-color: var(--primary-blue);
-            color: var(--white);
+            background: linear-gradient(135deg, var(--primary-blue) 0%, #1976d2 100%);
+            color: white;
+            border: none;
         }
         .btn-primary:hover {
-            background-color: #0044b3;
-            color: var(--white);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 88, 228, 0.3);
+            color: white;
         }
         .btn-secondary {
-            background-color: var(--text-secondary);
-            color: var(--white);
+            background-color: white;
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
         }
         .btn-secondary:hover {
-            background-color: #555555;
-            color: var(--white);
+            background-color: #f0f0f0;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            color: var(--text-primary);
         }
 
         #documentViewer {
             width: 100%;
             height: 100%;
             border: none;
-            border-radius: 6px;
+            border-radius: 8px;
+            box-shadow: var(--shadow-sm);
         }
         .preview-placeholder {
             display: flex;
@@ -507,10 +650,15 @@ try {
             height: 100%;
             text-align: center;
             color: var(--text-secondary);
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: var(--shadow-sm);
         }
         .preview-placeholder i {
-            font-size: 3rem;
-            margin-bottom: 0.75rem;
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            color: var(--primary-blue);
+            opacity: 0.7;
         }
 
         @keyframes fadeIn {
@@ -520,7 +668,7 @@ try {
         @keyframes slideUp {
             from {
                 opacity: 0;
-                transform: translateY(20px);
+                transform: translateY(30px);
             }
             to {
                 opacity: 1;
@@ -542,6 +690,20 @@ try {
             }
             .document-modal-title {
                 max-width: 70%;
+            }
+            .action-buttons {
+                flex-direction: column;
+            }
+            .btn-action {
+                width: 100%;
+                justify-content: center;
+            }
+            .document-summary-header {
+                flex-direction: column;
+            }
+            .document-icon {
+                width: 100%;
+                height: 80px;
             }
         }
 
@@ -1433,7 +1595,6 @@ try {
                         $fileName = basename($filePath);
                         $fileURL = $BASE_URL . $fileName;
                         $fileExt = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
-                        $fileSize = (!empty($filePath) && file_exists($filePath)) ? filesize($filePath) : 0;
                         $judul = htmlspecialchars($doc['judul'] ?? 'Tanpa Judul');
                         
                         $abstrak_raw = $doc['abstrak'] ?? 'Tidak ada deskripsi';
@@ -1735,20 +1896,55 @@ try {
                 });
             };
 
-            const authorsList = Array.isArray(doc.authors) ? doc.authors : [];
-            const authorsHtml = authorsList.length > 0 ? authorsList.map(author => `
-                <div class="author-card">
-                    <div class="author-name">${author.nama_penulis || author.name || ''}</div>
-                    ${author.afiliasi ? `<div class="author-affiliation">${author.afiliasi}</div>` : ''}
-                </div>
-            `).join('') : '<p class="text-muted">Tidak ada penulis</p>';
-
+            // Parse keywords from the kata_kunci field (comma-separated)
             const keywordsList = Array.isArray(doc.keywords) ? doc.keywords : [];
             const keywordsHtml = keywordsList.length > 0 ? keywordsList.map(keyword => 
-                `<span class="keyword-badge">${(keyword.keyword || keyword) || ''}</span>`
+                `<span class="keyword-badge">${keyword}</span>`
             ).join('') : '<p class="text-muted">Tidak ada kata kunci</p>';
             
+            // Buat deskripsi singkat untuk ditampilkan di kartu ringkasan
+            let shortDescription = doc.abstrak || 'Tidak ada deskripsi';
+            if (shortDescription.length > 200) {
+                shortDescription = shortDescription.substring(0, 200) + '...';
+            }
+            
             infoContent.innerHTML = `
+                <!-- Kartu Ringkasan Dokumen -->
+                <div class="document-summary-card">
+                    <div class="document-summary-header">
+                        <div class="document-icon">
+                            <i class="bi bi-file-earmark-text"></i>
+                        </div>
+                        <div class="document-title-container">
+                            <h3 class="document-title">${doc.judul || 'Tanpa Judul'}</h3>
+                            <div class="document-meta-info">
+                                <div class="document-meta-item">
+                                    <i class="bi bi-person"></i>
+                                    <span>${doc.uploader_name || 'Admin'}</span>
+                                </div>
+                                <div class="document-meta-item">
+                                    <i class="bi bi-calendar3"></i>
+                                    <span>${formatDate(doc.tgl_unggah)}</span>
+                                </div>
+                                <div class="document-meta-item">
+                                    <i class="bi bi-folder"></i>
+                                    <span>${doc.nama_jurusan || '-'}</span>
+                                </div>
+                            </div>
+                            <div class="document-badges">
+                                <span class="document-badge ${doc.status_badge}">${doc.status_name}</span>
+                                ${doc.turnitin ? `<span class="document-badge badge-info">Turnitin: ${doc.turnitin}%</span>` : ''}
+                                <span class="document-badge badge-secondary">${doc.file_type ? doc.file_type.toUpperCase() : '-'}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="document-description" id="documentDescription">
+                        ${shortDescription}
+                    </div>
+                    ${doc.abstrak && doc.abstrak.length > 200 ? 
+                        `<div class="document-description-toggle" onclick="toggleDescription()">Baca selengkapnya</div>` : ''}
+                </div>
+                
                 <div class="detail-container">
                     <!-- Informasi Utama -->
                     <div class="detail-section">
@@ -1767,6 +1963,11 @@ try {
                                 <span class="detail-label">Turnitin</span>
                                 <span class="detail-value">${doc.turnitin}%</span>
                             </div>` : ''}
+                            ${doc.turnitin_file ? `
+                            <div class="detail-item">
+                                <span class="detail-label">File Turnitin</span>
+                                <span class="detail-value">${doc.turnitin_file}</span>
+                            </div>` : ''}
                             <div class="detail-item">
                                 <span class="detail-label">Nama File</span>
                                 <span class="detail-value">${doc.file_name || '-'}</span>
@@ -1778,6 +1979,10 @@ try {
                             <div class="detail-item">
                                 <span class="detail-label">Ukuran File</span>
                                 <span class="detail-value">${formatFileSize(doc.file_size)}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">ID Divisi</span>
+                                <span class="detail-value">${doc.id_divisi || '-'}</span>
                             </div>
                         </div>
                     </div>
@@ -1834,14 +2039,6 @@ try {
                         </div>
                     </div>
 
-                    <!-- Penulis -->
-                    <div class="detail-section">
-                        <h6 class="detail-section-title"><i class="bi bi-people"></i> Penulis</h6>
-                        <div class="author-list">
-                            ${authorsHtml}
-                        </div>
-                    </div>
-
                     <!-- Kata Kunci -->
                     <div class="detail-section">
                         <h6 class="detail-section-title"><i class="bi bi-tags"></i> Kata Kunci</h6>
@@ -1851,6 +2048,23 @@ try {
                     </div>
                 </div>
             `;
+        }
+        
+        // Fungsi untuk toggle deskripsi
+        function toggleDescription() {
+            const description = document.getElementById('documentDescription');
+            const toggle = document.querySelector('.document-description-toggle');
+            
+            if (description.classList.contains('expanded')) {
+                description.classList.remove('expanded');
+                let shortText = currentDocumentData.abstrak.substring(0, 200) + '...';
+                description.textContent = shortText;
+                toggle.textContent = 'Baca selengkapnya';
+            } else {
+                description.classList.add('expanded');
+                description.textContent = currentDocumentData.abstrak;
+                toggle.textContent = 'Tampilkan lebih sedikit';
+            }
         }
 
         function loadPreview(doc) {

@@ -68,8 +68,6 @@ if (isset($_GET['id'], $_GET['timestamp'], $_GET['signature'])) {
             $error = "Link reset kata sandi tidak valid. Silakan ajukan permintaan baru.";
         }
     }
-} else {
-    $error = "Parameter link tidak lengkap. Silakan ajukan permintaan baru dari halaman lupa kata sandi.";
 }
 
 // Cek session untuk popup sukses

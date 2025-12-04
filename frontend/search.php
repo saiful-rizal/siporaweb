@@ -24,12 +24,12 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'get_detail' && isset($_GET['id'])
                    p.nama_prodi,
                    t.nama_tema,
                    y.tahun
-            FROM documents d
-            LEFT JOIN users u ON d.id_user = u.id_user
-            LEFT JOIN jurusan j ON d.id_jurusan = j.id_jurusan
-            LEFT JOIN prodi p ON d.id_prodi = p.id_prodi
-            LEFT JOIN tema t ON d.id_tema = t.id_tema
-            LEFT JOIN tahun y ON d.id_tahun = y.year_id
+            FROM dokumen d
+            LEFT JOIN users u ON d.uploader_id = u.id_user
+            LEFT JOIN master_jurusan j ON d.id_jurusan = j.id_jurusan
+            LEFT JOIN master_prodi p ON d.id_prodi = p.id_prodi
+            LEFT JOIN master_tema t ON d.id_tema = t.id_tema
+            LEFT JOIN master_tahun y ON d.year_id = y.year_id
             WHERE d.dokumen_id = :document_id
             LIMIT 1
         ");
@@ -42,23 +42,11 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'get_detail' && isset($_GET['id'])
             exit();
         }
 
-        $stmt = $pdo->prepare("
-            SELECT a.nama_penulis, a.afiliasi
-            FROM penulis_dokumen pd
-            JOIN penulis a ON pd.id_penulis = a.id_penulis
-            WHERE pd.dokumen_id = :document_id
-        ");
-        $stmt->execute(['document_id' => $document['dokumen_id']]);
-        $authors = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        $stmt = $pdo->prepare("
-            SELECT k.keyword
-            FROM keyword_dokumen kd
-            JOIN keyword k ON kd.id_keyword = k.id_keyword
-            WHERE kd.dokumen_id = :document_id
-        ");
-        $stmt->execute(['document_id' => $document['dokumen_id']]);
-        $keywords = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        // Parse keywords from the kata_kunci field (comma-separated)
+        $keywords = [];
+        if (!empty($document['kata_kunci'])) {
+            $keywords = array_map('trim', explode(',', $document['kata_kunci']));
+        }
 
         $filePath = $document['file_path'] ?? '';
         $fileName = basename($filePath);
@@ -86,16 +74,18 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'get_detail' && isset($_GET['id'])
                 'status_name' => getStatusName($document['status_id']),
                 'status_badge' => getStatusBadge($document['status_id']),
                 'turnitin' => $document['turnitin'],
-                'authors' => $authors,
+                'turnitin_file' => $document['turnitin_file'],
+                'kata_kunci' => $document['kata_kunci'],
                 'keywords' => $keywords,
-                'can_edit' => isset($_SESSION['user_id']) && ($_SESSION['user_id'] == $document['id_user'] || $_SESSION['role'] == 'admin'),
-                'created_at' => $document['created_at'],
-                'updated_at' => $document['updated_at'],
+                'id_divisi' => $document['id_divisi'],
+                'can_edit' => isset($_SESSION['user_id']) && ($_SESSION['user_id'] == $document['uploader_id'] || $_SESSION['role'] == 'admin'),
+                'created_at' => $document['tgl_unggah'],
+                'updated_at' => $document['tgl_unggah'],
                 'id_jurusan' => $document['id_jurusan'],
                 'id_prodi' => $document['id_prodi'],
                 'id_tema' => $document['id_tema'],
-                'id_tahun' => $document['id_tahun'],
-                'id_user' => $document['id_user']
+                'year_id' => $document['year_id'],
+                'uploader_id' => $document['uploader_id']
             ]
         ];
 
@@ -143,7 +133,7 @@ try {
 if (!empty($search_query)) {
     $results = $uploadModel->searchDocuments($search_query);
 
-    // Hanya tampilkan dokumen yang sudah dipublish (status_id == 5)
+    // Hanya tampilkan dokumen yang sudah dipublikasikan (status_id == 5)
     $results = array_filter($results, function($doc) {
         return isset($doc['status_id']) && (int)$doc['status_id'] === 5;
     });
@@ -192,7 +182,7 @@ if (!empty($search_query)) {
             --danger-color: #dc3545;
             --modal-backdrop: rgba(0, 0, 0, 0.6);
             --modal-bg: #ffffff;
-            --modal-header-bg: #f8f9fa;
+            --modal-header-bg: linear-gradient(135deg, #0058e4 0%, #1976d2 100%);
             --modal-border-color: #dee2e6;
             --modal-shadow: 0 10px 50px rgba(0, 0, 0, 0.3);
         }
@@ -885,7 +875,7 @@ if (!empty($search_query)) {
 
         .document-detail-tabs {
             display: flex;
-            border-bottom: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--modal-border-color);
             background-color: var(--background-page);
             flex-shrink: 0;
         }
@@ -1048,10 +1038,6 @@ if (!empty($search_query)) {
             height: 100%;
             text-align: center;
             color: var(--text-secondary);
-        }
-        /* Removed font-size for icon as it's deleted */
-        .preview-placeholder p {
-            max-width: 80%;
         }
 
         @keyframes fadeIn {
@@ -1225,7 +1211,6 @@ if (!empty($search_query)) {
                         $fileName = basename($filePath);
                         $fileURL = $BASE_URL . $fileName;
                         $fileExt = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
-                        $fileSize = (!empty($filePath) && file_exists($filePath)) ? filesize($filePath) : 0;
                         $judul = htmlspecialchars($doc['judul'] ?? 'Tanpa Judul');
                         
                         $abstrak_raw = $doc['abstrak'] ?? 'Tidak ada deskripsi';
@@ -1456,17 +1441,9 @@ if (!empty($search_query)) {
                 });
             };
 
-            const authorsList = Array.isArray(doc.authors) ? doc.authors : [];
-            const authorsHtml = authorsList.length > 0 ? authorsList.map(author => `
-                <div class="author-card">
-                    <div class="author-name">${author.nama_penulis || author.name || ''}</div>
-                    ${author.afiliasi ? `<div class="author-affiliation">${author.afiliasi}</div>` : ''}
-                </div>
-            `).join('') : '<p class="text-muted">Tidak ada penulis</p>';
-
             const keywordsList = Array.isArray(doc.keywords) ? doc.keywords : [];
             const keywordsHtml = keywordsList.length > 0 ? keywordsList.map(keyword => 
-                `<span class="keyword-badge">${(keyword.keyword || keyword) || ''}</span>`
+                `<span class="keyword-badge">${keyword}</span>`
             ).join('') : '<p class="text-muted">Tidak ada kata kunci</p>';
             
             infoContent.innerHTML = `
@@ -1488,6 +1465,11 @@ if (!empty($search_query)) {
                                 <span class="detail-label">Turnitin</span>
                                 <span class="detail-value">${doc.turnitin}%</span>
                             </div>` : ''}
+                            ${doc.turnitin_file ? `
+                            <div class="detail-item">
+                                <span class="detail-label">File Turnitin</span>
+                                <span class="detail-value">${doc.turnitin_file}</span>
+                            </div>` : ''}
                             <div class="detail-item">
                                 <span class="detail-label">Nama File</span>
                                 <span class="detail-value">${doc.file_name || '-'}</span>
@@ -1499,6 +1481,10 @@ if (!empty($search_query)) {
                             <div class="detail-item">
                                 <span class="detail-label">Ukuran File</span>
                                 <span class="detail-value">${formatFileSize(doc.file_size)}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">ID Divisi</span>
+                                <span class="detail-value">${doc.id_divisi || '-'}</span>
                             </div>
                         </div>
                     </div>
@@ -1555,14 +1541,6 @@ if (!empty($search_query)) {
                         </div>
                     </div>
 
-                    <!-- Penulis -->
-                    <div class="detail-section">
-                        <h6 class="detail-section-title"><i class="bi bi-people"></i> Penulis</h6>
-                        <div class="author-list">
-                            ${authorsHtml}
-                        </div>
-                    </div>
-
                     <!-- Kata Kunci -->
                     <div class="detail-section">
                         <h6 class="detail-section-title"><i class="bi bi-tags"></i> Kata Kunci</h6>
@@ -1604,6 +1582,10 @@ if (!empty($search_query)) {
                 content.classList.remove('active');
             });
             document.getElementById(`${tabName}-tab`).classList.add('active');
+
+            if (tabName === 'preview' && currentDocumentData) {
+                loadPreview(currentDocumentData);
+            }
         }
 
         function closeDocumentModal() {

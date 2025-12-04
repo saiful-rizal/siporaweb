@@ -29,15 +29,15 @@ function getContrastColor($hexColor) {
 }
 
 function hasProfilePhoto($user_id) {
-    $photo_path = __DIR__ . '/../uploads/profile_photos/' . $user_id . '.jpg';
+    $photo_path = __DIR__ . '/../uploads/profile/profile_' . $user_id . '.jpg';
     return file_exists($photo_path);
 }
 
 function getProfilePhotoUrl($user_id, $email, $username) {
-    $photo_path = __DIR__ . '/../uploads/profile_photos/' . $user_id . '.jpg';
+    $photo_path = __DIR__ . '/../uploads/profile/profile_' . $user_id . '.jpg';
 
     if (file_exists($photo_path)) {
-        return 'uploads/profile_photos/' . $user_id . '.jpg?t=' . time();
+        return 'uploads/profile/profile_' . $user_id . '.jpg?t=' . time();
     }
 
     return 'profile_image.php?id=' . $user_id 

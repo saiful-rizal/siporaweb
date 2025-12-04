@@ -25,13 +25,13 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'get_detail' && isset($_GET['id'])
                    p.nama_prodi,
                    t.nama_tema,
                    y.tahun
-            FROM documents d
-            LEFT JOIN users u ON d.id_user = u.id_user
-            LEFT JOIN jurusan j ON d.id_jurusan = j.id_jurusan
-            LEFT JOIN prodi p ON d.id_prodi = p.id_prodi
-            LEFT JOIN tema t ON d.id_tema = t.id_tema
-            LEFT JOIN tahun y ON d.id_tahun = y.year_id
-            WHERE d.dokumen_id = :document_id AND d.id_user = :user_id
+            FROM dokumen d
+            LEFT JOIN users u ON d.uploader_id = u.id_user
+            LEFT JOIN master_jurusan j ON d.id_jurusan = j.id_jurusan
+            LEFT JOIN master_prodi p ON d.id_prodi = p.id_prodi
+            LEFT JOIN master_tema t ON d.id_tema = t.id_tema
+            LEFT JOIN master_tahun y ON d.year_id = y.year_id
+            WHERE d.dokumen_id = :document_id AND d.uploader_id = :user_id
             LIMIT 1
         ");
         $stmt->execute(['document_id' => $document_id, 'user_id' => $user_id]);
@@ -43,23 +43,11 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'get_detail' && isset($_GET['id'])
             exit();
         }
 
-        $stmt = $pdo->prepare("
-            SELECT a.nama_penulis, a.afiliasi
-            FROM penulis_dokumen pd
-            JOIN penulis a ON pd.id_penulis = a.id_penulis
-            WHERE pd.dokumen_id = :document_id
-        ");
-        $stmt->execute(['document_id' => $document['dokumen_id']]);
-        $authors = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        $stmt = $pdo->prepare("
-            SELECT k.keyword
-            FROM keyword_dokumen kd
-            JOIN keyword k ON kd.id_keyword = k.id_keyword
-            WHERE kd.dokumen_id = :document_id
-        ");
-        $stmt->execute(['document_id' => $document['dokumen_id']]);
-        $keywords = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        // Parse keywords from the kata_kunci field (comma-separated)
+        $keywords = [];
+        if (!empty($document['kata_kunci'])) {
+            $keywords = array_map('trim', explode(',', $document['kata_kunci']));
+        }
 
         $filePath = $document['file_path'] ?? '';
         $fileName = basename($filePath);
@@ -87,16 +75,18 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'get_detail' && isset($_GET['id'])
                 'status_name' => getStatusName($document['status_id']),
                 'status_badge' => getStatusBadge($document['status_id']),
                 'turnitin' => $document['turnitin'],
-                'authors' => $authors,
+                'turnitin_file' => $document['turnitin_file'],
+                'kata_kunci' => $document['kata_kunci'],
                 'keywords' => $keywords,
-                'can_edit' => isset($_SESSION['user_id']) && ($_SESSION['user_id'] == $document['id_user'] || $_SESSION['role'] == 'admin'),
-                'created_at' => $document['created_at'],
-                'updated_at' => $document['updated_at'],
+                'id_divisi' => $document['id_divisi'],
+                'can_edit' => isset($_SESSION['user_id']) && ($_SESSION['user_id'] == $document['uploader_id'] || $_SESSION['role'] == 'admin'),
+                'created_at' => $document['tgl_unggah'],
+                'updated_at' => $document['tgl_unggah'],
                 'id_jurusan' => $document['id_jurusan'],
                 'id_prodi' => $document['id_prodi'],
                 'id_tema' => $document['id_tema'],
-                'id_tahun' => $document['id_tahun'],
-                'id_user' => $document['id_user']
+                'year_id' => $document['year_id'],
+                'uploader_id' => $document['uploader_id']
             ]
         ];
 
@@ -1334,7 +1324,7 @@ try {
                         data-nama-jurusan="<?php echo htmlspecialchars($doc['nama_jurusan'] ?? '', ENT_QUOTES); ?>" data-nama-prodi="<?php echo htmlspecialchars($doc['nama_prodi'] ?? '', ENT_QUOTES); ?>" data-nama-tema="<?php echo htmlspecialchars($doc['nama_tema'] ?? '', ENT_QUOTES); ?>" data-tahun="<?php echo htmlspecialchars($doc['tahun'] ?? '', ENT_QUOTES); ?>"
                         data-status-id="<?php echo htmlspecialchars($doc['status_id'] ?? '', ENT_QUOTES); ?>" data-status-name="<?php echo htmlspecialchars(getStatusName($doc['status_id'] ?? 0), ENT_QUOTES); ?>" data-status-badge="<?php echo htmlspecialchars(getStatusBadge($doc['status_id'] ?? 0), ENT_QUOTES); ?>"
                         data-turnitin="<?php echo htmlspecialchars($doc['turnitin'] ?? '', ENT_QUOTES); ?>" data-file-name="<?php echo htmlspecialchars($fileName, ENT_QUOTES); ?>" data-file-size="<?php echo htmlspecialchars($doc['file_size'] ?? 0, ENT_QUOTES); ?>"
-                        data-tgl-unggah="<?php echo htmlspecialchars($doc['tgl_unggah'] ?? '', ENT_QUOTES); ?>" data-updated-at="<?php echo htmlspecialchars($doc['updated_at'] ?? '', ENT_QUOTES); ?>" data-id-user="<?php echo htmlspecialchars($doc['id_user'] ?? '', ENT_QUOTES); ?>"
+                        data-tgl-unggah="<?php echo htmlspecialchars($doc['tgl_unggah'] ?? '', ENT_QUOTES); ?>" data-updated-at="<?php echo htmlspecialchars($doc['tgl_unggah'] ?? '', ENT_QUOTES); ?>" data-id-user="<?php echo htmlspecialchars($doc['id_user'] ?? '', ENT_QUOTES); ?>"
                         data-id="<?php echo $doc['dokumen_id']; ?>" data-file-url="<?php echo $fileURL; ?>" data-file-type="<?php echo $fileExt; ?>"
                         onclick="showDocumentPreview(<?php echo $doc['dokumen_id']; ?>, '<?php echo $fileURL; ?>', '<?php echo $fileExt; ?>')">
                         <!-- STYLING THUMBNAIL SESUAI SEARCH.PHP -->
@@ -1464,7 +1454,7 @@ try {
             currentDocumentId = documentId;
             const modal = document.getElementById("documentModal");
 
-            // Read data attributes from the card to immediately build a minimal doc object
+            // Read data attributes from card to immediately build a minimal doc object
             const card = document.querySelector(`[data-id="${documentId}"]`);
             const title = (card && (card.dataset.fullTitle || card.dataset.title)) || 'Pratinjau Dokumen';
             const description = (card && (card.dataset.fullDescription || card.dataset.description)) || '';
@@ -1510,7 +1500,7 @@ try {
             modal.style.display = "block";
             switchTab('preview');
             loadPreviewFromUrl(fileUrl, fileType);
-            // Also populate the info tab from available DOM data so it shows immediately
+            // Also populate info tab from available DOM data so it shows immediately
             try {
                 displayDocumentInfo(currentDocumentData);
             } catch (e) {
@@ -1571,7 +1561,7 @@ try {
             displayDocumentInfo(currentDocumentData);
 
             // Fetch full details in background and update the view when available
-            fetch(`browser.php?ajax=get_detail&id=${documentId}`)
+            fetch(`dashboard.php?ajax=get_detail&id=${documentId}`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
@@ -1608,17 +1598,10 @@ try {
                 });
             };
 
-            const authorsList = Array.isArray(doc.authors) ? doc.authors : [];
-            const authorsHtml = authorsList.length > 0 ? authorsList.map(author => `
-                <div class="author-card">
-                    <div class="author-name">${author.nama_penulis || author.name || ''}</div>
-                    ${author.afiliasi ? `<div class="author-affiliation">${author.afiliasi}</div>` : ''}
-                </div>
-            `).join('') : '<p class="text-muted">Tidak ada penulis</p>';
-
+            // Parse keywords from the kata_kunci field (comma-separated)
             const keywordsList = Array.isArray(doc.keywords) ? doc.keywords : [];
             const keywordsHtml = keywordsList.length > 0 ? keywordsList.map(keyword => 
-                `<span class="keyword-badge">${(keyword.keyword || keyword) || ''}</span>`
+                `<span class="keyword-badge">${keyword}</span>`
             ).join('') : '<p class="text-muted">Tidak ada kata kunci</p>';
             
             // Buat deskripsi singkat untuk ditampilkan di kartu ringkasan
@@ -1682,6 +1665,11 @@ try {
                                 <span class="detail-label">Turnitin</span>
                                 <span class="detail-value">${doc.turnitin}%</span>
                             </div>` : ''}
+                            ${doc.turnitin_file ? `
+                            <div class="detail-item">
+                                <span class="detail-label">File Turnitin</span>
+                                <span class="detail-value">${doc.turnitin_file}</span>
+                            </div>` : ''}
                             <div class="detail-item">
                                 <span class="detail-label">Nama File</span>
                                 <span class="detail-value">${doc.file_name || '-'}</span>
@@ -1693,6 +1681,10 @@ try {
                             <div class="detail-item">
                                 <span class="detail-label">Ukuran File</span>
                                 <span class="detail-value">${formatFileSize(doc.file_size)}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">ID Divisi</span>
+                                <span class="detail-value">${doc.id_divisi || '-'}</span>
                             </div>
                         </div>
                     </div>
@@ -1747,14 +1739,6 @@ try {
                                 <span class="detail-value">${doc.tahun || '-'}</span>
                             </div>
                         </div>
-                    </div>
-
-                    <!-- Penulis -->
-                    <div class="detail-section">
-                        <h6 class="detail-section-title"><i class="bi bi-people"></i> Penulis</h6>
-                        <div class="author-list">
-                                ${authorsHtml}
-                            </div>
                     </div>
 
                     <!-- Kata Kunci -->
@@ -1836,7 +1820,7 @@ try {
 
         function shareDocument() {
             if (!currentDocumentId) return;
-            const url = `${window.location.origin}/browser.php?share_id=${currentDocumentId}`;
+            const url = `${window.location.origin}/dashboard.php?share_id=${currentDocumentId}`;
             
             if (navigator.share) {
                 navigator.share({
