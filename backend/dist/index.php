@@ -34,8 +34,9 @@ try {
       th.tahun AS tahun,
       s.nama_status AS status
     FROM dokumen d
-    LEFT JOIN master_tahun th ON th.tahun = th.tahun
+    LEFT JOIN master_tahun th ON d.year_id = th.year_id
     LEFT JOIN master_status_dokumen s ON d.status_id = s.status_id
+    WHERE d.status_id = 1
     ORDER BY d.tgl_unggah DESC
     LIMIT 10
   ");
@@ -140,7 +141,7 @@ try {
     <div class="row mt-4">
   <div class="col-md-12">
     <div class="custom-card">
-      <div class="judul-section">📄 Dokumen Terbaru</div>
+      <div class="judul-section">Dokumen Terbaru</div>
 
     <table class="table table-bordered table-hover align-middle table-custom">
 <thead class="table-header-custom text-center">

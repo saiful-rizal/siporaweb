@@ -2,9 +2,87 @@
 session_start();
 
 // AMAN: ambil ID user dari session
-$id_user = $_SESSION['id_user'] ?? null;
+ $id_user = $_SESSION['id_user'] ?? null;
 
 require_once __DIR__ . '/../config/db.php';
+
+// --- LOGIKA PROSES (HAPUS & TAMBAH) ---
+// Letakkan logika di bagian paling atas sebelum ada output HTML
+
+// 1. PROSES HAPUS ADMIN
+if (isset($_GET['action']) && $_GET['action'] == 'delete') {
+    // Hanya Super Admin (id_user = 5) yang bisa hapus
+    if (!isset($_SESSION['id_user']) || $_SESSION['id_user'] != 5) {
+        header("Location: kelola_admin.php?error=delete_failed");
+        exit();
+    }
+
+    $id_to_delete = $_GET['id_user'] ?? null;
+
+    // Validasi ID dan pastikan super admin tidak menghapus dirinya sendiri
+    if ($id_to_delete && is_numeric($id_to_delete) && $id_to_delete != 5) {
+        try {
+            $stmt = $pdo->prepare("DELETE FROM users WHERE id_user = ?");
+            $stmt->execute([$id_to_delete]);
+            header("Location: kelola_admin.php?success=delete");
+            exit();
+        } catch (PDOException $e) {
+            // Dalam produksi, log error: error_log($e->getMessage());
+            header("Location: kelola_admin.php?error=delete_failed");
+            exit();
+        }
+    } else {
+        header("Location: kelola_admin.php?error=delete_failed");
+        exit();
+    }
+}
+
+// 2. PROSES TAMBAH ADMIN
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    // Hanya Super Admin yang bisa menambahkan
+    if (!isset($_SESSION['id_user']) || $_SESSION['id_user'] != 5) {
+        header("Location: kelola_admin.php?error=access_denied");
+        exit();
+    }
+
+    $nama_lengkap = $_POST['nama_lengkap'];
+    $nim = $_POST['nim'];
+    $email = $_POST['email'];
+    $username = $_POST['username'];
+    $password = $_POST['password_hash']; // Nama input di form adalah password_hash
+    $password_hash = password_hash($password, PASSWORD_DEFAULT); // Enkripsi password
+
+    // Validasi email domain @polije.ac.id
+    if (!str_ends_with($email, '@polije.ac.id')) {
+        header("Location: kelola_admin.php?error=invalid_email");
+        exit();
+    }
+
+    // Cek duplikasi username atau email
+    $check_stmt = $pdo->prepare("SELECT id_user FROM users WHERE username = ? OR email = ?");
+    $check_stmt->execute([$username, $email]);
+    if ($check_stmt->fetch()) {
+        header("Location: kelola_admin.php?error=duplicate");
+        exit();
+    }
+
+    // Insert data ke database
+    // Diasumsikan tabel 'users' memiliki kolom 'role' dan 'status'
+    $sql = "INSERT INTO users (nama_lengkap, nim, email, username, password_hash, role, status) VALUES (?, ?, ?, ?, ?, 'admin', 'approved')";
+    $stmt= $pdo->prepare($sql);
+    
+    if ($stmt->execute([$nama_lengkap, $nim, $email, $username, $password_hash])) {
+        header("Location: kelola_admin.php?success=1");
+        exit();
+    } else {
+        header("Location: kelola_admin.php?error=general");
+        exit();
+    }
+}
+
+// --- AKHIR LOGIKA PROSES ---
+
+
 include 'header.php';
 include 'sidebar.php';
 
@@ -67,6 +145,8 @@ include 'sidebar.php';
               <h4 class="card-title mb-4">Tambahkan Admin</h4>
               <?php if (!empty($_GET['success']) && $_GET['success'] == 1): ?>
     <div class="alert alert-success">✔️ Admin berhasil ditambahkan!</div>
+<?php elseif (!empty($_GET['success']) && $_GET['success'] == 'delete'): ?>
+    <div class="alert alert-success">✔️ Admin berhasil dihapus!</div>
 
 <?php elseif (!empty($_GET['error']) && $_GET['error'] === 'invalid_email'): ?>
     <div class="alert alert-danger">❌ Email harus menggunakan domain @polije.ac.id!</div>
@@ -74,8 +154,11 @@ include 'sidebar.php';
 <?php elseif (!empty($_GET['error']) && $_GET['error'] === 'duplicate'): ?>
     <div class="alert alert-danger">❌ Username atau email sudah digunakan!</div>
 
+<?php elseif (!empty($_GET['error']) && $_GET['error'] === 'delete_failed'): ?>
+    <div class="alert alert-danger">❌ Gagal menghapus admin. Anda tidak memiliki izin atau terjadi kesalahan.</div>
+
 <?php elseif (!empty($_GET['error'])): ?>
-    <div class="alert alert-danger">❌ Terjadi kesalahan saat menambahkan admin.</div>
+    <div class="alert alert-danger">❌ Terjadi kesalahan.</div>
 
 <?php endif; ?>
 
@@ -89,8 +172,9 @@ include 'sidebar.php';
               <?php endif; ?>
 
               <!-- FORM Tambah Admin -->
+              <!-- Form action diubah ke "" agar memproses dirinya sendiri -->
               <div class="<?= $id_user != 5 ? 'locked' : '' ?>">
-                <form method="POST" action="proses_admin.php">
+                <form method="POST" action="">
                   <div class="form-group label">
                     <label>Nama Lengkap</label>
                     <input type="text" class="form-control-custom" name="nama_lengkap" required>
@@ -126,7 +210,7 @@ include 'sidebar.php';
         </div>
       </div>
 
-      <!-- TABEL ADMIN TIDAK DIUBAH! -->
+      <!-- TABEL ADMIN -->
       <div class="row mt-3">
         <div class="col-lg-10 mx-auto grid-margin stretch-card">
           <div class="card">
@@ -143,6 +227,7 @@ include 'sidebar.php';
                       <th>Email</th>
                       <th>Username</th>
                       <th>Status</th>
+                      <th>Aksi</th>
                     </tr>
                   </thead>
 
@@ -166,10 +251,27 @@ include 'sidebar.php';
                             <?= ucfirst($row['status']); ?>
                           </span>
                         </td>
+                        <td class="text-center">
+                          <?php
+                          // Tombol hapus hanya muncul untuk Super Admin (id_user = 5)
+                          // dan tidak muncul di baris Super Admin itu sendiri
+                          if ($id_user == 5 && $row['id_user'] != 5):
+                          ?>
+                            <!-- Link hapus diarahkan ke file ini sendiri -->
+                            <a href="?action=delete&id_user=<?= $row['id_user'] ?>" 
+                               class="btn btn-danger btn-sm" 
+                               onclick="return confirm('Apakah Anda yakin ingin menghapus admin <?= htmlspecialchars($row['nama_lengkap']) ?>?');">
+                               <i class="mdi mdi-delete"></i> Hapus
+                            </a>
+                          <?php else: ?>
+                            <span class="text-muted">-</span>
+                          <?php endif; ?>
+                        </td>
                       </tr>
 
                     <?php endforeach; else: ?>
-                      <tr><td colspan="7" class="text-center text-muted">Belum ada admin terdaftar.</td></tr>
+                      <!-- Perbarui colspan agar sesuai dengan jumlah kolom baru -->
+                      <tr><td colspan="8" class="text-center text-muted">Belum ada admin terdaftar.</td></tr>
                     <?php endif; ?>
                   </tbody>
 
